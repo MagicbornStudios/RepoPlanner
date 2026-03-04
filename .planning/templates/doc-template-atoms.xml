@@ -1,0 +1,38 @@
+<doc-atoms>
+  <atom id="GoalAtom">
+    <label>Goal</label>
+    <content>Describe the phase objective and how you will know it succeeded.</content>
+  </atom>
+  <atom id="ScopeAtom">
+    <label>Scope</label>
+    <content>Define in/out boundaries or UX/tech constraints.</content>
+  </atom>
+  <atom id="FileAtom">
+    <label>File</label>
+    <content>Reference path + keywords/notes.</content>
+  </atom>
+  <atom id="CommandAtom">
+    <label>Command</label>
+    <content>List commands executed or useful for inspection.</content>
+  </atom>
+  <atom id="DecisionAtom">
+    <label>Decision</label>
+    <content>Record choice + impact.</content>
+  </atom>
+  <atom id="KeywordAtom">
+    <label>Keyword</label>
+    <content>Term used for searching.</content>
+  </atom>
+  <atom id="TaskAtom">
+    <label>Task</label>
+    <content>Task description with status.</content>
+  </atom>
+  <atom id="VerificationAtom">
+    <label>Verification</label>
+    <content>Tests/builds verifying work.</content>
+  </atom>
+  <atom id="ReferenceAtom">
+    <label>Reference</label>
+    <content>Docs (PRD/GRD or others) giving direction.</content>
+  </atom>
+</doc-atoms>

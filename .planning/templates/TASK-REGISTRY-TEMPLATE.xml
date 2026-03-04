@@ -1,0 +1,11 @@
+<task-registry>
+  <task id="##" agent-id="agent-YYYYMMDD-xxxx">
+    <goal>Keep track of task scope and status.</goal>
+    <keywords>tag1,tag2</keywords>
+    <commands>
+      <command>pnpm --dir packages/kaplay-demo run build</command>
+    </commands>
+    <depends>##</depends>
+    <status>planned</status>
+  </task>
+</task-registry>

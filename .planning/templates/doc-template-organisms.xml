@@ -1,0 +1,32 @@
+<doc-organisms>
+  <organism id="PlanDocument">
+    <structure>
+      <atom ref="GoalAtom"/>
+      <atom ref="ScopeAtom"/>
+      <molecule ref="FilesBlock"/>
+      <molecule ref="KeywordsBlock"/>
+      <molecule ref="CommandsBlock"/>
+      <molecule ref="TasksBlock"/>
+      <molecule ref="DecisionsBlock"/>
+      <molecule ref="ReferencesBlock"/>
+    </structure>
+  </organism>
+  <organism id="SummaryDocument">
+    <structure>
+      <atom ref="GoalAtom"/>
+      <molecule ref="FilesBlock"/>
+      <molecule ref="KeywordsBlock"/>
+      <molecule ref="CommandsBlock"/>
+      <molecule ref="VerificationBlock"/>
+      <atom ref="ScopeAtom"/>
+    </structure>
+  </organism>
+  <organism id="RoadmapDocument">
+    <structure>
+      <atom ref="GoalAtom"/>
+      <molecule ref="FilesBlock"/>
+      <molecule ref="KeywordsBlock"/>
+      <atom ref="DecisionAtom"/>
+    </structure>
+  </organism>
+</doc-organisms>

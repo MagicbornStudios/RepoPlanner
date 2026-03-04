@@ -1,0 +1,11 @@
+<decisions>
+  <decision id="##">
+    <title>One-line decision</title>
+    <summary>Why this choice was made.</summary>
+    <impact>Effects on docs/engineering</impact>
+    <references>
+      <file path=".planning/ROADMAP.xml" />
+      <file path=".planning/TASK-REGISTRY.xml" />
+    </references>
+  </decision>
+</decisions>

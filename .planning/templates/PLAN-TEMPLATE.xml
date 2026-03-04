@@ -1,0 +1,43 @@
+<phase-plan>
+  <meta>
+    <phase-id>##</phase-id>
+    <phase-name>##</phase-name>
+    <date>YYYY-MM-DD</date>
+  </meta>
+  <purpose>Brief goal + success criteria.</purpose>
+  <scope>Out-of-scope and constraints (controller-first, Kaplay vs React, etc.).</scope>
+  <files>
+    <file path="path/to/file">
+      <description>Why it matters.</description>
+      <keywords>tag1,tag2</keywords>
+    </file>
+  </files>
+  <keywords>
+    <keyword>#</keyword>
+  </keywords>
+  <commands>
+    <command>pnpm --dir packages/kaplay-demo run build</command>
+  </commands>
+  <tasks>
+    <task id="phase-step" owner="name">
+      <description>What to do.</description>
+      <status>planned</status>
+    </task>
+  </tasks>
+  <questions>
+    <question id="q1" status="open">Open question; answer feeds DECISIONS or REQUIREMENTS.</question>
+  </questions>
+  <decisions>
+    <decision id="decision-id">
+      <summary>Decision text</summary>
+      <impact>How it affects future phases.</impact>
+    </decision>
+  </decisions>
+  <requriements-suggestions>
+    <suggestion id="req-suggest-1">
+      <gap>What is missing or unclear in REQUIREMENTS.xml.</gap>
+      <proposal>Proposed wording/update for REQUIREMENTS.xml.</proposal>
+      <status>suggested</status>
+    </suggestion>
+  </requriements-suggestions>
+</phase-plan>

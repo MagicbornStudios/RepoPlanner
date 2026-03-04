@@ -1,0 +1,66 @@
+<loop-template name="PhaseWorkflow">
+  <goal>Describe the phase objective and success criteria.</goal>
+  <scope>List in-scope and out-of-scope boundaries and UX constraints (controller/keyboard mix, Kaplay vs React, etc.).</scope>
+  <files>
+    <file path="packages/kaplay-demo/src/ui/organisms.ts">
+      <note>Command panel + shell layout keywords.</note>
+      <keywords>CommandPanel, ThreeColumnShell</keywords>
+    </file>
+    <file path=".planning/ROADMAP.xml">
+      <note>High-level phase status.</note>
+      <keywords>Phase 44, Planning Docs Lifecycle</keywords>
+    </file>
+  </files>
+  <keywords>
+    <keyword>ThreeColumnShell</keyword>
+    <keyword>KeyHintLegend</keyword>
+    <keyword>CommandPanelOrganism</keyword>
+  </keywords>
+  <references>
+    <reference>.planning/REQUIREMENTS.xml</reference>
+  </references>
+  <commands>
+    <cmd>pnpm --dir packages/kaplay-demo run typecheck</cmd>
+    <cmd>pnpm --dir packages/engine run build</cmd>
+    <cmd>rg CommandPanel packages/kaplay-demo/src</cmd>
+  </commands>
+  <decisions>
+    <decision id="DOCS-LIFECYCLE">
+      <summary>All planning phases must update Purpose/Files/Keywords/Commands in PLAN/SUMMARY.</summary>
+      <impact>Searchable context + repeatable loop.</impact>
+    </decision>
+  </decisions>
+  <state>
+    <agent-registry>
+      <agent id="agent-YYYYMMDD-xxxx">
+        <phase>##</phase>
+        <plan>##-##</plan>
+        <status>in-progress</status>
+      </agent>
+    </agent-registry>
+    <current-phase>44</current-phase>
+    <next-action>Phase 46-01 (key legends + UX hardening)</next-action>
+  </state>
+  <tasks>
+    <task id="44-1" status="done">
+      <desc>Expand atoms/molecules/organisms; update docs.</desc>
+      <keywords>SurfaceAtom, Keycap</keywords>
+    </task>
+    <task id="45-1" status="planned">
+      <desc>Document templates per phase using the XML spec.</desc>
+      <keywords>Phase Template</keywords>
+    </task>
+  </tasks>
+  <verification>
+    <test>pnpm --dir packages/kaplay-demo run build</test>
+    <test>pnpm --dir packages/engine-mcp run test:parity-smoke</test>
+  </verification>
+  <requriements-suggestions>
+    <suggestion id="req-suggest-1">
+      <phase>##</phase>
+      <gap>What was missing in REQUIREMENTS.xml during this loop.</gap>
+      <proposal>Text to add/update in REQUIREMENTS.xml.</proposal>
+      <status>suggested|applied</status>
+    </suggestion>
+  </requriements-suggestions>
+</loop-template>

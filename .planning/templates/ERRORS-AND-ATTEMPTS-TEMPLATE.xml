@@ -1,0 +1,12 @@
+<errors-and-attempts>
+  <attempt id="##">
+    <context>What was being attempted.</context>
+    <error>Observed error or failure condition.</error>
+    <analysis>Short reasoning about cause.</analysis>
+    <fix>Applied fix or next step.</fix>
+    <status>open|resolved</status>
+    <references>
+      <file path="path/to/file" />
+    </references>
+  </attempt>
+</errors-and-attempts>
