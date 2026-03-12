@@ -50,12 +50,22 @@ jobs:
           name: repoplanner-desktop-dist
       - name: Create platform zips
         run: |
+          set +e
           WIN_BIN="repoplanner-desktop-win_x64"
           [ -f "${WIN_BIN}.exe" ] && WIN_BIN="${WIN_BIN}.exe"
-          [ -f "$WIN_BIN" ] && zip -j repoplanner-desktop-windows-x64.zip "$WIN_BIN" resources.neu
-          [ -f repoplanner-desktop-mac_arm64 ] && zip -j repoplanner-desktop-darwin-arm64.zip repoplanner-desktop-mac_arm64 resources.neu
-          [ -f repoplanner-desktop-mac_x64 ] && zip -j repoplanner-desktop-darwin-x64.zip repoplanner-desktop-mac_x64 resources.neu
-          [ -f repoplanner-desktop-linux_x64 ] && zip -j repoplanner-desktop-linux-x64.zip repoplanner-desktop-linux_x64 resources.neu
+          if [ -f "$WIN_BIN" ]; then
+            zip -j repoplanner-desktop-windows-x64.zip "$WIN_BIN" resources.neu
+          fi
+          if [ -f repoplanner-desktop-mac_arm64 ]; then
+            zip -j repoplanner-desktop-darwin-arm64.zip repoplanner-desktop-mac_arm64 resources.neu
+          fi
+          if [ -f repoplanner-desktop-mac_x64 ]; then
+            zip -j repoplanner-desktop-darwin-x64.zip repoplanner-desktop-mac_x64 resources.neu
+          fi
+          if [ -f repoplanner-desktop-linux_x64 ]; then
+            zip -j repoplanner-desktop-linux-x64.zip repoplanner-desktop-linux_x64 resources.neu
+          fi
+          set -e
       - name: Upload zips
         uses: actions/upload-artifact@v4
         with:
