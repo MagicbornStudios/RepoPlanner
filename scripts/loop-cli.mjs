@@ -181,14 +181,17 @@ async function loadRoadmap() {
   const obj = parser.parse(xml);
   const road = obj.roadmap ?? obj;
   const phaseList = ensureArray(road.phase ?? []);
-  const phases = phaseList.map((ph) => ({
-    id: String(ph["@_id"] ?? "").padStart(2, "0"),
-    title: ph.title ?? "",
-    goal: ph.goal ?? "",
-    status: ph.status ?? "",
-    depends: ph.depends ?? "",
-    plans: ph.plans ?? "",
-  }));
+  const phases = phaseList.map((ph) => {
+    const goal = ph.goal ?? "";
+    return {
+      id: String(ph["@_id"] ?? "").padStart(2, "0"),
+      title: ph.title ?? "",
+      goal: typeof goal === "string" ? goal : (goal["#text"] ?? ""),
+      status: ph.status ?? "",
+      depends: ph.depends ?? "",
+      plans: ph.plans ?? "",
+    };
+  });
   return phases.sort((a, b) => Number(a.id) - Number(b.id));
 }
 
@@ -595,7 +598,10 @@ async function buildSystemMetrics() {
   const tasksOpen = tasksTotal - tasksDone;
   const completionRate = tasksTotal ? Math.round((tasksDone / tasksTotal) * 100) : 0;
   const openQuestionsCount = openQuestions.reduce((s, r) => s + (r.questions?.length ?? 0), 0);
-  const activeAgentsCount = (state?.agents ?? []).filter((a) => (a.status || "").toLowerCase() !== "inactive").length;
+  const activeAgentsCount = (state?.agents ?? []).filter((a) => {
+    const status = (a.status || "").toLowerCase();
+    return status === "in-progress" || status === "in_progress" || status === "active";
+  }).length;
   const phaseIdsWithTasks = [...new Set(tasks.map((t) => String(t.phase || "").padStart(2, "0")).filter(Boolean))];
   const phasesComplete = (roadmap ?? []).filter((p) => p.status === "Complete" || (p.status || "").toLowerCase() === "complete").length;
   const phasesTotal = (roadmap ?? []).length;
@@ -1355,12 +1361,27 @@ async function buildAgentLoopBundle(opts = {}) {
   const codeRefsFromTasks = extractCodeFileReferencesFromTasks(reg?.tasks ?? []);
   const codeFileReferences = [...new Set([...ensureArray(config.codeContextPaths), ...codeRefsFromTasks])].filter(Boolean).sort();
 
+  const norm = (id) => String(id || "").padStart(2, "0");
+  const summaryPhases = phases.map((p) => {
+    const pid = norm(p.id);
+    const tasksInPhase = (allTasks || []).filter((t) => norm(t.phase) === pid);
+    const fileRefs = getPhaseFileRefs(p.id, reg);
+    return {
+      id: p.id,
+      title: p.title,
+      status: p.status,
+      goal: p.goal ?? "",
+      tasks: tasksInPhase.map((t) => ({ id: t.id, status: t.status, goal: t.goal, agentId: t.agentId })),
+      fileRefs,
+    };
+  });
+
   const context = {
     sprintIndex,
     phaseIds,
     paths,
     phaseIdToTitle,
-    summary: { phases: phases.map((p) => ({ id: p.id, title: p.title, status: p.status })), taskCount: tasksInSprint.length },
+    summary: { phases: summaryPhases, taskCount: tasksInSprint.length },
     codeFileReferences,
   };
 
@@ -1551,7 +1572,7 @@ What is an agent's workflow? (summary)
   Snapshot     → planning snapshot (or new-agent-id) shows current phase, plan, agents, open tasks, phase progress.
   Get an ID    → planning new-agent-id prints a new id on one line (e.g. agent-20250303-abcd). The agent registers it in STATE.xml under agent-registry.
   Claim work   → Claim or create a task in TASK-REGISTRY.xml (phase, goal, commands).
-  Read context → When using the CLI (planning simulate loop), the bundle serves STATE, TASK-REGISTRY, ROADMAP, DECISIONS, and sprint phase dirs (and always serves coding conventions, e.g. AGENTS.md). The agent is also directed to code file references (from task commands + config) for implementation context.
+  Read context → Get the agent bundle with planning bundle --json (or MCP get_agent_bundle). The bundle serves STATE, TASK-REGISTRY, ROADMAP, DECISIONS, and sprint phase dirs (and always serves coding conventions, e.g. AGENTS.md). The agent is also directed to code file references (from task commands + config) for implementation context.
   Execute      → Do the task; update ROADMAP, phase PLAN/SUMMARY; sync TASK-REGISTRY, DECISIONS, STATE.
   Errors       → Record in ERRORS-AND-ATTEMPTS.xml if needed.
 
@@ -1560,8 +1581,49 @@ Full command reference and MCP: .planning/README.md
 
 function buildProgram() {
   const program = new Command();
-  program.name("planning").description("DungeonBreak planning CLI: state, agents, tasks, questions, sprints, simulate loop. Use --help on any subcommand. Agents: prefer planning MCP (dungeonbreak-planning) when available for orchestration.");
+  program.name("planning").description("DungeonBreak planning CLI: state, agents, tasks, questions, sprints, bundle (canonical agent context). Use --help on any subcommand. Agents: prefer planning MCP (dungeonbreak-planning) when available for orchestration.");
   program.addHelpText("after", WORKFLOW_HELP_TEXT);
+
+  program
+    .command("roadmap")
+    .description("Output full roadmap with all phases, task counts, file refs, and sprint window (for UI).")
+    .option("--json", "Output as JSON")
+    .action(async (opts) => {
+      const roadmap = await loadRoadmap();
+      const reg = await loadTaskRegistry();
+      const state = await loadState();
+      const config = await getConfig();
+      const size = config.sprintSize ?? 5;
+      let sprintIndex = 0;
+      if (roadmap?.length && state?.currentPhase) {
+        const idx = roadmap.findIndex((p) => p.id === state.currentPhase || String(state.currentPhase).padStart(2, "0") === p.id);
+        sprintIndex = idx >= 0 ? Math.floor(idx / size) : 0;
+      }
+      const phaseIdsInSprint = roadmap?.length ? getSprintPhaseIds(roadmap, size, sprintIndex) : [];
+      const norm = (id) => String(id || "").padStart(2, "0");
+      const phases = (roadmap ?? []).map((p) => {
+        const pid = norm(p.id);
+        const tasksInPhase = (reg?.tasks ?? []).filter((t) => norm(t.phase) === pid);
+        return {
+          id: p.id,
+          title: p.title,
+          status: p.status,
+          goal: p.goal ?? "",
+          taskCount: tasksInPhase.length,
+          fileRefs: getPhaseFileRefs(p.id, reg),
+          tasks: tasksInPhase.map((t) => ({ id: t.id, status: t.status, goal: (t.goal || "").slice(0, 120) })),
+        };
+      });
+      const out = { phases, sprintSize: size, sprintIndex, phaseIdsInSprint };
+      if (opts.json) {
+        console.log(JSON.stringify(out, null, 2));
+        return;
+      }
+      console.log("Sprint %s (phases: %s)", sprintIndex, phaseIdsInSprint.join(", "));
+      for (const p of phases) {
+        console.log("  %s  %s  [%s]  %s tasks", p.id, p.title, p.status, p.taskCount);
+      }
+    });
 
   program
     .command("snapshot")
@@ -2161,9 +2223,39 @@ function buildProgram() {
       if (p) console.log("  %s", p.description ?? "");
     });
 
+  program
+    .command("bundle")
+    .description("Canonical agent context: snapshot + context paths + open tasks + open questions (same as simulate loop). Use for orchestration; prefer over simulate loop.")
+    .option("--json", "Output as JSON (default for agent profile)")
+    .action(async (opts) => {
+      await appendUsageLog("bundle");
+      const config = await getConfig();
+      const useJson = opts.json ?? config.profiles?.[config.currentProfile]?.defaultJson === true;
+      const bundle = await buildAgentLoopBundle();
+      if (useJson) {
+        console.log(JSON.stringify(bundle, null, 2));
+      } else {
+        console.log("=== Agent bundle (canonical context) ===");
+        console.log("Snapshot: phase=%s plan=%s status=%s", bundle.snapshot?.currentPhase, bundle.snapshot?.currentPlan, bundle.snapshot?.status);
+        console.log("Next action: %s", bundle.snapshot?.nextAction ?? "—");
+        console.log("\nContext sprint %s  phases: %s", bundle.context.sprintIndex, bundle.context.phaseIds.join(", "));
+        console.log("Paths (%s):\n  %s", bundle.context.paths.length, bundle.context.paths.join("\n  "));
+        console.log("\nOpen tasks: %s", bundle.openTasks.length);
+        for (const t of bundle.openTasks.slice(0, 10)) {
+          console.log("  %s [%s] %s", t.id, t.status, t.goal);
+        }
+        if (bundle.openTasks.length > 10) console.log("  ...");
+        console.log("\nOpen questions: %s", bundle.openQuestions.length);
+        for (const q of bundle.openQuestions.slice(0, 5)) {
+          console.log("  [%s] %s", q.phaseId, q.text);
+        }
+        if (bundle.openQuestions.length > 5) console.log("  ...");
+      }
+    });
+
   const simulateCmd = program
     .command("simulate")
-    .description("Simulate the agent loop: what context an agent would get when it runs the loop. Use with agent profile for Codex-friendly output.");
+    .description("Simulate the agent loop: what context an agent would get when it runs the loop. Use with agent profile for Codex-friendly output. Prefer 'planning bundle' for canonical context.");
   simulateCmd
     .command("loop")
     .description("Run the full agent loop simulation: snapshot + context paths + summary + open tasks + open questions (single bundle for Codex/agents)")
@@ -2505,6 +2597,97 @@ function buildProgram() {
     });
 
   program
+    .command("iterate-tasks")
+    .description("Brownfield overnight loop: run agent task-by-task from TASK-REGISTRY until no open tasks or max iterations. See DECISIONS.xml BROWNFIELD-OVERNIGHT-LOOP and OVERNIGHT-DEFINITION-OF-DONE.")
+    .requiredOption("--run <cmd>", "Command to run each iteration (e.g. codex-agent); receives JSON with bundle and currentTask on stdin.")
+    .option("--phase <id>", "Only consider open tasks in this phase (e.g. 50)")
+    .option("--max <n>", "Max iterations.", "50")
+    .option("--commit <msg>", "Git commit message prefix after each iteration; use \"\" to skip.", "planning iter-tasks")
+    .option("--cwd <path>", "Working directory.")
+    .option("--stop-file <path>", "If this file exists, stop after current iteration.", ".planning/stop-overnight")
+    .action(async (opts) => {
+      const runCmd = opts.run;
+      const phaseId = opts.phase || null;
+      const maxIter = Math.max(1, parseInt(opts.max, 10) || 50);
+      const commitMsg = opts.commit;
+      const cwd = path.resolve(opts.cwd || process.cwd());
+      const stopFile = opts.stopFile ? path.resolve(cwd, opts.stopFile) : null;
+      for (let iter = 1; iter <= maxIter; iter++) {
+        const reg = await loadTaskRegistry();
+        if (!reg) {
+          console.error("[planning iterate-tasks] TASK-REGISTRY.xml not found.");
+          process.exitCode = 1;
+          return;
+        }
+        let openTasks = (reg.tasks ?? []).filter((t) => (t.status || "").toLowerCase() !== "done");
+        if (phaseId) openTasks = openTasks.filter((t) => String(t.phase || "").padStart(2, "0") === String(phaseId).padStart(2, "0"));
+        if (openTasks.length === 0) {
+          console.error("[planning iterate-tasks] No open tasks in scope. Done.");
+          return;
+        }
+        if (stopFile && await fs.readFile(stopFile, "utf8").then(() => true).catch(() => false)) {
+          console.error("[planning iterate-tasks] Stop file found. Stopping.");
+          return;
+        }
+        const bundle = await buildAgentLoopBundle();
+        const currentTask = openTasks[0];
+        const stdinPayload = JSON.stringify({ bundle, currentTask });
+        console.error("[planning iterate-tasks] iteration %s/%s  task=%s  %s", iter, maxIter, currentTask.id, currentTask.goal?.slice(0, 50) ?? "");
+        const parts = runCmd.trim().split(/\s+/);
+        const result = spawnSync(parts[0], parts.slice(1), {
+          cwd,
+          encoding: "utf8",
+          maxBuffer: 10 * 1024 * 1024,
+          input: stdinPayload,
+        });
+        if (result.stderr) console.error(result.stderr);
+        if (commitMsg) {
+          spawnSync("git", ["add", "-A"], { cwd });
+          const status = spawnSync("git", ["status", "--short"], { cwd, encoding: "utf8" });
+          if (status.stdout?.trim()) spawnSync("git", ["commit", "-m", `${commitMsg} ${iter}`], { cwd });
+        }
+      }
+      console.error("[planning iterate-tasks] max iterations (%s) reached.", maxIter);
+      process.exitCode = 1;
+    });
+
+  const setupCmd = program
+    .command("setup")
+    .description("Setup and onboarding: verify environment for greenfield or brownfield planning.");
+  setupCmd
+    .command("checklist")
+    .description("Run setup checklist: git, .planning presence, planning CLI. Use for brownfield (existing repo) or before starting greenfield (new repo).")
+    .option("--json", "Output machine-readable pass/fail per item")
+    .action(async (opts) => {
+      const checks = [];
+      const gitResult = spawnSync("git", ["--version"], { encoding: "utf8" });
+      const gitOk = gitResult.status === 0;
+      checks.push({ id: "git", name: "Git installed and on PATH", ok: gitOk });
+      const planningDirOk = await fs.access(PLANNING_DIR).then(() => true).catch(() => false);
+      checks.push({ id: "planning-dir", name: ".planning directory exists", ok: planningDirOk });
+      let stateOk = false;
+      let registryOk = false;
+      if (planningDirOk) {
+        stateOk = await fs.access(path.join(PLANNING_DIR, "STATE.xml")).then(() => true).catch(() => false);
+        registryOk = await fs.access(path.join(PLANNING_DIR, "TASK-REGISTRY.xml")).then(() => true).catch(() => false);
+      }
+      checks.push({ id: "state-xml", name: ".planning/STATE.xml exists", ok: stateOk });
+      checks.push({ id: "task-registry", name: ".planning/TASK-REGISTRY.xml exists", ok: registryOk });
+      const allOk = checks.every((c) => c.ok);
+      if (opts.json) {
+        console.log(JSON.stringify({ ok: allOk, checks }, null, 2));
+      } else {
+        for (const c of checks) {
+          console.log("%s  %s", c.ok ? "ok" : "FAIL", c.name);
+        }
+        if (!allOk) {
+          console.error("\nSetup incomplete. Install git, ensure you are in a repo with .planning (brownfield), or bootstrap .planning for greenfield. See .planning/README.md.");
+          process.exitCode = 1;
+        }
+      }
+    });
+
+  program
     .command("migrate-planning")
     .description("Migrate planning markdown to REQUIREMENTS.xml")
     .action(() => migratePlanningMarkdown());
@@ -2535,7 +2718,7 @@ async function main() {
   const program = buildProgram();
   const argv = process.argv.slice(2);
   const top = argv[0];
-  if (top && !["cleanup", "help", "iterate"].includes(top)) {
+  if (top && !["cleanup", "help", "iterate", "iterate-tasks", "setup"].includes(top)) {
     await cleanupInactiveAgents({ silent: true });
   }
   await program.parseAsync(process.argv);

@@ -1,0 +1,64 @@
+/**
+ * RepoPlanner self-contained styles.
+ * Import once (e.g. from the barrel or your layout). Scoped under .repo-planner so we
+ * provide fallbacks for semantic tokens and planning status/diff without overwriting host globals.
+ */
+
+/* Fallbacks: define internal vars from host or defaults, then re-expose standard names in scope */
+.repo-planner {
+  /* Internal fallbacks (no recursion) */
+  --rp-fg: var(--foreground, #f1f5f9);
+  --rp-muted: var(--muted-foreground, #94a3b8);
+  --rp-card: var(--card, #1e293b);
+  --rp-border: var(--border, #334155);
+  --rp-bg: var(--background, #0f172a);
+  --rp-primary: var(--primary, #818cf8);
+  --rp-destructive: var(--destructive, #ef4444);
+  --rp-muted-bg: var(--muted, #1e293b);
+  /* Re-expose so Tailwind/shadcn classes work; host values win when set */
+  --foreground: var(--rp-fg);
+  --muted-foreground: var(--rp-muted);
+  --card: var(--rp-card);
+  --border: var(--rp-border);
+  --background: var(--rp-bg);
+  --primary: var(--rp-primary);
+  --destructive: var(--rp-destructive);
+  --muted: var(--rp-muted-bg);
+
+  /* Planning tokens: host can override; we always have a default */
+  --planning-status-done: var(--planning-status-done, 142 76% 36%);
+  --planning-status-progress: var(--planning-status-progress, 38 92% 50%);
+  --planning-status-failed: var(--planning-status-failed, 0 72% 51%);
+  --planning-diff-add: var(--planning-diff-add, 142 76% 36%);
+  --planning-diff-remove: var(--planning-diff-remove, 0 72% 51%);
+  --color-planning-status-done: hsl(var(--planning-status-done));
+  --color-planning-status-progress: hsl(var(--planning-status-progress));
+  --color-planning-status-failed: hsl(var(--planning-status-failed));
+  --color-planning-diff-add: hsl(var(--planning-diff-add));
+  --color-planning-diff-remove: hsl(var(--planning-diff-remove));
+}
+
+/* Status/diff classes so badges and diffs look correct with or without host definitions */
+.repo-planner .planning-status-done {
+  border-color: color-mix(in oklch, var(--color-planning-status-done), transparent 40%);
+  background-color: color-mix(in oklch, var(--color-planning-status-done), transparent 85%);
+  color: var(--color-planning-status-done);
+}
+.repo-planner .planning-status-progress {
+  border-color: color-mix(in oklch, var(--color-planning-status-progress), transparent 40%);
+  background-color: color-mix(in oklch, var(--color-planning-status-progress), transparent 85%);
+  color: var(--color-planning-status-progress);
+}
+.repo-planner .planning-status-failed {
+  border-color: color-mix(in oklch, var(--color-planning-status-failed), transparent 40%);
+  background-color: color-mix(in oklch, var(--color-planning-status-failed), transparent 85%);
+  color: var(--color-planning-status-failed);
+}
+.repo-planner .planning-diff-add {
+  background-color: color-mix(in oklch, var(--color-planning-diff-add), transparent 85%);
+  color: color-mix(in oklch, var(--color-planning-diff-add), white 20%);
+}
+.repo-planner .planning-diff-remove {
+  background-color: color-mix(in oklch, var(--color-planning-diff-remove), transparent 85%);
+  color: color-mix(in oklch, var(--color-planning-diff-remove), white 20%);
+}
