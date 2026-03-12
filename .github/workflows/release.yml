@@ -1,10 +1,17 @@
 name: Release
 
 on:
+  push:
+    branches: [main]
+    tags: ["v*"]
   release:
     types: [published]
-  push:
-    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Release tag (e.g. v0.2.0)"
+        required: true
+        default: "v0.2.0"
 
 permissions:
   contents: write
@@ -34,33 +41,40 @@ jobs:
           name: repoplanner-desktop-dist
           path: desktop/dist/
 
-  release:
+  zips:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Download dist
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: repoplanner-desktop-dist
-
-      - name: List dist contents
-        run: ls -la
-
       - name: Create platform zips
         run: |
           WIN_BIN="repoplanner-desktop-win_x64"
           [ -f "${WIN_BIN}.exe" ] && WIN_BIN="${WIN_BIN}.exe"
           [ -f "$WIN_BIN" ] && zip -j repoplanner-desktop-windows-x64.zip "$WIN_BIN" resources.neu
-
           [ -f repoplanner-desktop-mac_arm64 ] && zip -j repoplanner-desktop-darwin-arm64.zip repoplanner-desktop-mac_arm64 resources.neu
           [ -f repoplanner-desktop-mac_x64 ] && zip -j repoplanner-desktop-darwin-x64.zip repoplanner-desktop-mac_x64 resources.neu
           [ -f repoplanner-desktop-linux_x64 ] && zip -j repoplanner-desktop-linux-x64.zip repoplanner-desktop-linux_x64 resources.neu
+      - name: Upload zips
+        uses: actions/upload-artifact@v4
+        with:
+          name: repoplanner-desktop-zips
+          path: "*.zip"
 
-          ls -la *.zip 2>/dev/null || true
-
+  release:
+    needs: zips
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: repoplanner-desktop-zips
+      - run: ls -la
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
           files: |
             repoplanner-desktop-windows-x64.zip
             repoplanner-desktop-darwin-arm64.zip
