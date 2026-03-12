@@ -1,0 +1,14 @@
+{
+  "name": "repo-planner-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Neutralino desktop wrapper for the planning cockpit; loads the planning app URL (default localhost:3101).",
+  "scripts": {
+    "run": "neu run",
+    "build": "neu build",
+    "build:release": "neu build --release"
+  },
+  "devDependencies": {
+    "@neutralinojs/neu": "^11.4.0"
+  }
+}

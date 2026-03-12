@@ -1,0 +1,24 @@
+{
+  "applicationId": "com.replanner.desktop",
+  "version": "0.1.0",
+  "defaultMode": "window",
+  "url": "http://localhost:3101",
+  "enableServer": false,
+  "enableNativeAPI": false,
+  "modes": {
+    "window": {
+      "title": "RepoPlanner",
+      "width": 1280,
+      "height": 800,
+      "minWidth": 800,
+      "minHeight": 600,
+      "center": true,
+      "resizable": true
+    }
+  },
+  "cli": {
+    "binaryName": "repoplanner-desktop",
+    "resourcesPath": "/resources/",
+    "distributionPath": "/dist/"
+  }
+}
