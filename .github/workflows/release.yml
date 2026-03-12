@@ -16,6 +16,7 @@ on:
 permissions:
   contents: write
 
+# CI runs on Ubuntu; neu build produces Linux binaries. For Windows/macOS, build locally from desktop/ on those OSes.
 jobs:
   build:
     runs-on: ubuntu-latest

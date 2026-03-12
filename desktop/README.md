@@ -26,4 +26,4 @@ npm run build
 npm run build:release
 ```
 
-Binaries are in `desktop/dist/`. Downloadable builds are published to [GitHub Releases](https://github.com/MagicbornStudios/RepoPlanner/releases).
+Binaries are in `desktop/dist/`. CI (Ubuntu) only produces Linux binaries. **For Windows or macOS**, run the same commands locally on that OS; the binary and `resources.neu` will be in `desktop/dist/`. Downloadable builds are on [GitHub Releases](https://github.com/MagicbornStudios/RepoPlanner/releases) and as workflow artifacts.
