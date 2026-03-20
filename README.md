@@ -34,16 +34,27 @@ RepoPlanner gives you a single contract (STATE, TASK-REGISTRY, ROADMAP, phases) 
 
 ### CLI (from a host repo)
 
+Run the CLI from the repo that contains your `.planning/` (host repo root when used as submodule, or RepoPlanner repo root when using RepoPlanner standalone).
+
 ```bash
 # Add RepoPlanner as a submodule
 git submodule add https://github.com/MagicbornStudios/RepoPlanner.git vendor/repo-planner
 git submodule update --init --recursive
 
-# Run the CLI from your repo root (so it sees your .planning/)
+# From host repo root (so the CLI sees your .planning/)
+node vendor/repo-planner/scripts/loop-cli.mjs init
 node vendor/repo-planner/scripts/loop-cli.mjs snapshot
+# or: npx repo-planner snapshot (if RepoPlanner is published)
+# or in package.json: "planning": "node vendor/repo-planner/scripts/loop-cli.mjs" then: pnpm planning init && pnpm planning snapshot
 ```
 
-Or in `package.json`: `"planning": "node vendor/repo-planner/scripts/loop-cli.mjs"`.
+**Greenfield:** After adding the submodule, run **`init`** once to create `.planning/` (templates, STATE, TASK-REGISTRY, ROADMAP, REQUIREMENTS, phase `01-greenfield`, `reports/.gitkeep`) and a starter **`AGENTS.md`** at the repo root. Options: `--force` (overwrite bootstrap files), `--no-agents-md` (skip AGENTS.md). Same as **`planning setup init`**.
+
+From a RepoPlanner clone: `pnpm exec repo-planner snapshot` or `pnpm repo-planner snapshot` (add `"repo-planner": "repo-planner"` script to run the bin).
+
+**When you need the CLI:** Not required when using the **desktop app** (it talks to the planning server) or **web-only** viewing. Use the CLI for **agents** (Cursor, Codex, MCP), **headless** runs, and **CI** (e.g. snapshot, new-agent-id, report generation).
+
+**Dual loop (host vs RepoPlanner):** From a host repo you can run the loop for RepoPlanner’s own `.planning/` (e.g. to track RepoPlanner product work) without mixing with the host’s loop. Use `--root vendor/repo-planner` or `REPOPLANNER_PROJECT_ROOT=vendor/repo-planner` with the CLI; add a host script like `planning:repoplanner` that runs the CLI with `--root vendor/repo-planner`. For a **RepoPlanner-focused dashboard**, start the planning dev server with `REPOPLANNER_PROJECT_ROOT=vendor/repo-planner` (or from this repo `pnpm web:dev`) so the UI and APIs use only RepoPlanner `.planning/` and the CLI resolves to `scripts/loop-cli.mjs`; from the host you can run `pnpm planning:standalone:repoplanner` so the UI and APIs show RepoPlanner’s state, roadmap, and tasks.
 
 ### Desktop app
 
@@ -51,7 +62,17 @@ Or in `package.json`: `"planning": "node vendor/repo-planner/scripts/loop-cli.mj
 2. Start the planning server in a repo that has `.planning/` (e.g. in that repo: `pnpm planning:standalone` or equivalent).
 3. Run the desktop binary; it opens a window that loads the planning cockpit at `http://localhost:3101`.
 
-### Web app (browser)
+### Run from the RepoPlanner repo
+
+From this repo you can run the web app and desktop without a host:
+
+- **Web:** `pnpm web:dev` (dev server at http://localhost:3101), `pnpm web:build`, `pnpm web:start`
+- **Desktop:** `pnpm desktop:run` (Neutralino window), `pnpm desktop:build` / `pnpm desktop:build:release`
+- **CLI:** `pnpm exec repo-planner snapshot` or `pnpm planning snapshot` (if the bin is installed)
+
+Install dependencies in `web/` first: `pnpm --dir web install` (or from repo root with a workspace that includes `web`).
+
+### Web app (browser) from a host
 
 Hosts that embed RepoPlanner (e.g. [DungeonBreak-docs](https://github.com/MagicbornStudios/DungeonBreak-docs)) run a Next.js planning app. From the host repo:
 
@@ -69,8 +90,9 @@ The **web app can be deployed to Vercel**: set the project root to the package t
 | `scripts/loop-cli.mjs` | Planning CLI entrypoint. |
 | `desktop/` | Neutralino app config and build; produces the desktop binary. |
 | `.github/workflows/release.yml` | Builds desktop artifacts and (on tag) publishes to Releases. |
-| `api/`, `components/`, `lib/` | Next.js API routes and React UI consumed by the host planning app. |
-| `.planning/templates/` | XML/MD templates for STATE, ROADMAP, TASK-REGISTRY, etc. |
+| `web/` | Next.js planning cockpit (app router, API routes, UI). Run from this repo with `pnpm --dir web run dev`; host repos can delegate to it. |
+| `api/`, `components/`, `lib/` | API routes and React UI consumed by `web/` or by a host planning app. |
+| `.planning/templates/` | XML/MD templates for STATE, ROADMAP, TASK-REGISTRY, etc. RepoPlanner ships **only** these templates; the **live** `.planning/` (STATE.xml, TASK-REGISTRY.xml, etc.) lives in the **project you’re planning** (host repo or the repo pointed at by `REPOPLANNER_PROJECT_ROOT`). When you run the CLI or web app, the “project root” is that repo, not this one. |
 
 ---
 
@@ -86,13 +108,20 @@ See [INSTALL.md](./INSTALL.md) for path aliases, CSS tokens, and install-routes.
 
 ## Deployment (Vercel)
 
-To run the **planning web app** on Vercel:
+The planning Next app can live in a host monorepo (e.g. `packages/planning`) or, for a self-contained deploy, inside this repo (e.g. `web/` once added).
 
-- Use a host repo that contains the Next.js planning app (e.g. a monorepo with `packages/planning`).
-- In Vercel, set **Root Directory** to that package (e.g. `packages/planning`).
-- Set **Build Command** to `pnpm build` (or `npm run build`) and **Output** to the default Next.js output.
-- Optionally set `REPOPLANNER_PROJECT_ROOT` if the app should resolve `.planning` from a different path (e.g. in serverless, a read-only mount or env-based path).
-- **Secrets** — Only needed for optional features: GitHub OAuth (`AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET`, `AUTH_SECRET`) and similar. The app runs without them; those features are feature-flagged off when env vars are missing.
+**Deploy from a host monorepo** (e.g. DungeonBreak-docs):
+
+- Root Directory = the package that contains the Next.js planning app (e.g. `packages/planning`).
+- Build/install from repo root so `vendor/repo-planner` is available.
+- Optionally set `REPOPLANNER_PROJECT_ROOT` if the app should resolve `.planning` from a different path.
+- **Secrets** — Only needed for optional features: GitHub OAuth (`AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET`, `AUTH_SECRET`). The app runs without them; those features are feature-flagged off when env vars are missing.
+
+**Deploy from the RepoPlanner repo:**
+
+- Set **Root Directory** to `web`. Build runs from `web/` (Next.js app).
+- If Vercel fails with "lockfile is not up to date", the project uses `web/vercel.json` with `installCommand: "pnpm install --no-frozen-lockfile"`. Alternatively set **Install Command** in the Vercel project to `pnpm install --no-frozen-lockfile`, or commit an up-to-date `web/pnpm-lock.yaml` after running `pnpm install` in `web/`.
+- Optionally set `REPOPLANNER_PROJECT_ROOT` if the deployed app should resolve a different project (e.g. for a future “connect repo” flow).
 
 ---
 

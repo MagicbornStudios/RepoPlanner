@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import fs from "node:fs/promises";
@@ -10,12 +11,45 @@ import TOML from "@iarna/toml";
 import ejs from "ejs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(process.cwd());
-const PLANNING_DIR = path.join(ROOT, ".planning");
-const PHASES_DIR = path.join(PLANNING_DIR, "phases");
-const REPORTS_DIR = path.join(PLANNING_DIR, "reports");
-const TEMPLATES_DIR = path.join(PLANNING_DIR, "templates");
-const CONFIG_PATH = path.join(PLANNING_DIR, "planning-config.toml");
+
+function getRoot() {
+  if (global.__planningRoot) return global.__planningRoot;
+  const argv = process.argv;
+  const i = argv.indexOf("--root");
+  if (i !== -1 && argv[i + 1]) {
+    global.__planningRoot = path.resolve(process.cwd(), argv[i + 1]);
+    return global.__planningRoot;
+  }
+  const envRoot = process.env.REPOPLANNER_PROJECT_ROOT;
+  if (envRoot) {
+    global.__planningRoot = path.resolve(process.cwd(), envRoot);
+    return global.__planningRoot;
+  }
+  global.__planningRoot = path.resolve(process.cwd());
+  return global.__planningRoot;
+}
+function getPlanningDir() {
+  return path.join(getRoot(), ".planning");
+}
+function getPhasesDir() {
+  return path.join(getPlanningDir(), "phases");
+}
+function getReportsDir() {
+  return path.join(getPlanningDir(), "reports");
+}
+function getTemplatesDir() {
+  return path.join(getPlanningDir(), "templates");
+}
+function getConfigPath() {
+  return path.join(getPlanningDir(), "planning-config.toml");
+}
+
+const ROOT = getRoot();
+const PLANNING_DIR = getPlanningDir();
+const PHASES_DIR = getPhasesDir();
+const REPORTS_DIR = getReportsDir();
+const TEMPLATES_DIR = getTemplatesDir();
+const CONFIG_PATH = getConfigPath();
 const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_" });
 
 /** Versioned format for the agent loop bundle. No single industry standard; MCP is for tools. We use planning-agent-context so consumers can validate. */
@@ -680,6 +714,244 @@ async function readIfExists(filePath) {
   }
 }
 
+/** RepoPlanner package root (contains `.planning/templates`). */
+function getRepoPlannerPackageRoot() {
+  return path.resolve(__dirname, "..");
+}
+
+async function pathExists(p) {
+  return fs.access(p).then(() => true).catch(() => false);
+}
+
+/** Prefer submodule CLI hint when present; else standalone RepoPlanner clone. */
+async function resolvePlanningCliInvokeHint() {
+  const vendorCli = path.join(ROOT, "vendor", "repo-planner", "scripts", "loop-cli.mjs");
+  if (await pathExists(vendorCli)) return "node vendor/repo-planner/scripts/loop-cli.mjs";
+  const rootCli = path.join(ROOT, "scripts", "loop-cli.mjs");
+  if (await pathExists(rootCli)) return "node scripts/loop-cli.mjs";
+  return "node vendor/repo-planner/scripts/loop-cli.mjs";
+}
+
+const INIT_PHASE_DIR = "01-greenfield";
+const INIT_PLAN_ID = "01-01";
+
+async function writePlanningBootstrapFile(relPath, content, force) {
+  const full = path.join(PLANNING_DIR, relPath);
+  if (!force && (await pathExists(full))) return { relPath, skipped: true };
+  await fs.mkdir(path.dirname(full), { recursive: true });
+  await fs.writeFile(full, content, "utf8");
+  return { relPath, skipped: false };
+}
+
+async function runPlanningInit(opts) {
+  const force = opts.force === true;
+  const wantAgents = opts.agentsMd !== false;
+
+  const statePath = path.join(PLANNING_DIR, "STATE.xml");
+  if (!force && (await pathExists(statePath))) {
+    console.error("Refusing: .planning/STATE.xml already exists. Use --force to overwrite bootstrap outputs.");
+    process.exitCode = 1;
+    return;
+  }
+
+  const pkgRoot = getRepoPlannerPackageRoot();
+  const bundledTemplates = path.join(pkgRoot, ".planning", "templates");
+  if (!(await pathExists(bundledTemplates))) {
+    throw new Error(
+      `RepoPlanner templates not found at ${bundledTemplates}. Use a full RepoPlanner clone or submodule (not a single-file copy of the CLI).`,
+    );
+  }
+
+  await fs.mkdir(PLANNING_DIR, { recursive: true });
+  await fs.mkdir(REPORTS_DIR, { recursive: true });
+  await fs.mkdir(TEMPLATES_DIR, { recursive: true });
+  const phaseDirPath = path.join(PHASES_DIR, INIT_PHASE_DIR);
+  await fs.mkdir(phaseDirPath, { recursive: true });
+
+  const entries = await fs.readdir(bundledTemplates, { withFileTypes: true });
+  for (const ent of entries) {
+    if (!ent.isFile()) continue;
+    const src = path.join(bundledTemplates, ent.name);
+    const dest = path.join(TEMPLATES_DIR, ent.name);
+    if (!force && (await pathExists(dest))) continue;
+    await fs.copyFile(src, dest);
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const cliHint = await resolvePlanningCliInvokeHint();
+
+  const planTpl = await readIfExists(path.join(bundledTemplates, "PLAN-TEMPLATE.xml"));
+  const summaryTpl = await readIfExists(path.join(bundledTemplates, "SUMMARY-TEMPLATE.xml"));
+  if (!planTpl || !summaryTpl) {
+    throw new Error("PLAN-TEMPLATE.xml or SUMMARY-TEMPLATE.xml missing from RepoPlanner templates.");
+  }
+
+  const planBody = planTpl
+    .replace("<phase-id>##</phase-id>", "<phase-id>01</phase-id>")
+    .replace("<phase-name>##</phase-name>", "<phase-name>greenfield</phase-name>")
+    .replace("<date>YYYY-MM-DD</date>", `<date>${today}</date>`);
+  const summaryBody = summaryTpl
+    .replace("<phase-id>##</phase-id>", "<phase-id>01</phase-id>")
+    .replace("<phase-name>##</phase-name>", "<phase-name>greenfield</phase-name>")
+    .replace("<date>YYYY-MM-DD</date>", `<date>${today}</date>`);
+
+  const roadmapXml = `<?xml version="1.0" encoding="UTF-8"?>
+<roadmap>
+  <phase id="01">
+    <goal>Phase 01 — establish requirements and deliver the first planned vertical slice.</goal>
+    <requirements>REQ-01</requirements>
+    <depends></depends>
+    <status>planned</status>
+    <links>
+      <plan>.planning/phases/${INIT_PHASE_DIR}/${INIT_PLAN_ID}-PLAN.xml</plan>
+      <summary>.planning/phases/${INIT_PHASE_DIR}/${INIT_PLAN_ID}-SUMMARY.xml</summary>
+    </links>
+  </phase>
+  <doc-flow>
+    <doc name="TASK-REGISTRY.xml">List tasks with keywords + statuses.</doc>
+    <doc name="STATE.xml">Current phase pointer + next action.</doc>
+    <doc name="REQUIREMENTS.xml">Product / PRD references (CDATA docs).</doc>
+  </doc-flow>
+</roadmap>
+`;
+
+  const stateXml = `<?xml version="1.0" encoding="UTF-8"?>
+<state>
+  <agent-registry />
+  <current-phase>01</current-phase>
+  <current-plan>${INIT_PLAN_ID}</current-plan>
+  <status>active</status>
+  <next-action>Edit REQUIREMENTS.xml and ${INIT_PLAN_ID}-PLAN.xml; run ${cliHint} snapshot; register an agent id before claiming tasks.</next-action>
+  <references>
+    <reference>.planning/REQUIREMENTS.xml</reference>
+    <reference>.planning/ROADMAP.xml</reference>
+    <reference>.planning/TASK-REGISTRY.xml</reference>
+    <reference>.planning/DECISIONS.xml</reference>
+  </references>
+  <agent-id-policy>
+    <format>agent-YYYYMMDD-xxxx</format>
+    <rule>Each agent must generate a unique id and register it in STATE.xml before claiming tasks.</rule>
+    <generator>${cliHint} new-agent-id</generator>
+  </agent-id-policy>
+</state>
+`;
+
+  const taskRegXml = `<?xml version="1.0" encoding="UTF-8"?>
+<task-registry>
+  <phase id="01">
+    <task id="${INIT_PLAN_ID}" agent-id="" status="planned">
+      <goal>Refine REQUIREMENTS.xml and phase 01 plan; run snapshot and claim this task when ready.</goal>
+      <keywords>bootstrap,requirements,planning</keywords>
+      <commands>
+        <command>${cliHint} snapshot</command>
+      </commands>
+      <depends></depends>
+    </task>
+  </phase>
+</task-registry>
+`;
+
+  const decisionsXml = `<?xml version="1.0" encoding="UTF-8"?>
+<decisions>
+</decisions>
+`;
+
+  const errorsXml = `<?xml version="1.0" encoding="UTF-8"?>
+<errors-and-attempts />
+`;
+
+  const reqXml = `<?xml version="1.0" encoding="UTF-8"?>
+<planning-references>
+  <doc>
+    <path>README.md</path>
+    <content><![CDATA[
+# Requirements (REQ-01)
+
+Describe what this repository should deliver, who it is for, and what "done" means for phase 01.
+
+- Replace this stub with your real PRD bullets or link out to a longer doc.
+- Keep ROADMAP phase 01 requirements in sync (e.g. REQ-01).
+]]></content>
+  </doc>
+</planning-references>
+`;
+
+  const planningReadme = `# Planning loop
+
+This directory holds **STATE**, **TASK-REGISTRY**, **ROADMAP**, phase **PLAN**/**SUMMARY** files, and **templates**.
+
+Bootstrap created \`phases/${INIT_PHASE_DIR}/\` with \`${INIT_PLAN_ID}-PLAN.xml\`. Edit **REQUIREMENTS.xml** and that plan, then run your planning CLI \`snapshot\`.
+
+`;
+
+  const configToml = `[planning]
+sprintSize = 5
+currentProfile = "human"
+conventionsPaths = ["AGENTS.md"]
+
+[profiles.human]
+description = "Default human view."
+
+[profiles.agent]
+description = "Agent perspective; defaultJson = true."
+defaultJson = true
+`;
+
+  const rootWrites = [
+    ["planning-config.toml", configToml],
+    ["STATE.xml", stateXml],
+    ["TASK-REGISTRY.xml", taskRegXml],
+    ["ROADMAP.xml", roadmapXml],
+    ["DECISIONS.xml", decisionsXml],
+    ["ERRORS-AND-ATTEMPTS.xml", errorsXml],
+    ["REQUIREMENTS.xml", reqXml],
+    ["README.md", planningReadme],
+  ];
+
+  for (const [rel, body] of rootWrites) {
+    const r = await writePlanningBootstrapFile(rel, body, force);
+    console.log(r.skipped ? `skip  .planning/${r.relPath}` : `write .planning/${r.relPath}`);
+  }
+
+  const gitkeepPath = path.join(REPORTS_DIR, ".gitkeep");
+  if (force || !(await pathExists(gitkeepPath))) {
+    await fs.writeFile(gitkeepPath, "\n", "utf8");
+    console.log("write .planning/reports/.gitkeep");
+  } else {
+    console.log("skip  .planning/reports/.gitkeep");
+  }
+
+  const planPath = path.join(phaseDirPath, `${INIT_PLAN_ID}-PLAN.xml`);
+  const sumPath = path.join(phaseDirPath, `${INIT_PLAN_ID}-SUMMARY.xml`);
+  if (force || !(await pathExists(planPath))) {
+    await fs.writeFile(planPath, planBody, "utf8");
+    console.log(`write .planning/phases/${INIT_PHASE_DIR}/${INIT_PLAN_ID}-PLAN.xml`);
+  } else {
+    console.log(`skip  .planning/phases/${INIT_PHASE_DIR}/${INIT_PLAN_ID}-PLAN.xml`);
+  }
+  if (force || !(await pathExists(sumPath))) {
+    await fs.writeFile(sumPath, summaryBody, "utf8");
+    console.log(`write .planning/phases/${INIT_PHASE_DIR}/${INIT_PLAN_ID}-SUMMARY.xml`);
+  } else {
+    console.log(`skip  .planning/phases/${INIT_PHASE_DIR}/${INIT_PLAN_ID}-SUMMARY.xml`);
+  }
+
+  const agentsPath = path.join(ROOT, "AGENTS.md");
+  const agentsTpl = await readIfExists(path.join(bundledTemplates, "AGENTS-TEMPLATE.md"));
+  if (wantAgents && agentsTpl) {
+    if (force || !(await pathExists(agentsPath))) {
+      await fs.writeFile(agentsPath, agentsTpl, "utf8");
+      console.log("write AGENTS.md (repo root)");
+    } else {
+      console.log("skip  AGENTS.md (already exists; use --force to overwrite)");
+    }
+  } else if (wantAgents && !agentsTpl) {
+    console.error("warning: AGENTS-TEMPLATE.md missing; skipped AGENTS.md");
+  }
+
+  console.log("\nBootstrap complete. Next: edit .planning/REQUIREMENTS.xml and run `%s snapshot`.", cliHint);
+}
+
 function extractDocFromReferences(refXml, docPath) {
   const pattern = new RegExp(
     `<doc>\\s*<path>${docPath.replaceAll(".", "\\.")}<\\/path>\\s*<content><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/content>\\s*<\\/doc>`,
@@ -860,7 +1132,7 @@ async function migratePhaseMarkdown() {
 async function migrateRoadmapFromReferences() {
   const refPath = path.join(PLANNING_DIR, "REQUIREMENTS.xml");
   const refXml = await readIfExists(refPath);
-  if (!refXml) throw new Error("REQUIREMENTS.xml not found. Run migrate-planning first.");
+  if (!refXml) throw new Error("REQUIREMENTS.xml not found.");
   const roadmapMd = extractDocFromReferences(refXml, "ROADMAP.md");
   if (!roadmapMd) throw new Error("ROADMAP.md not found inside REQUIREMENTS.xml");
   const phases = parseRoadmapPhases(roadmapMd);
@@ -1568,20 +1840,16 @@ async function openBrowser(url) {
 }
 
 const WORKFLOW_HELP_TEXT = `
-What is an agent's workflow? (summary)
-  Snapshot     → planning snapshot (or new-agent-id) shows current phase, plan, agents, open tasks, phase progress.
-  Get an ID    → planning new-agent-id prints a new id on one line (e.g. agent-20250303-abcd). The agent registers it in STATE.xml under agent-registry.
-  Claim work   → Claim or create a task in TASK-REGISTRY.xml (phase, goal, commands).
-  Read context → Get the agent bundle with planning bundle --json (or MCP get_agent_bundle). The bundle serves STATE, TASK-REGISTRY, ROADMAP, DECISIONS, and sprint phase dirs (and always serves coding conventions, e.g. AGENTS.md). The agent is also directed to code file references (from task commands + config) for implementation context.
-  Execute      → Do the task; update ROADMAP, phase PLAN/SUMMARY; sync TASK-REGISTRY, DECISIONS, STATE.
-  Errors       → Record in ERRORS-AND-ATTEMPTS.xml if needed.
-
-Full command reference and MCP: .planning/README.md
+Agent loop: snapshot | new-agent-id → claim task → bundle --json (or MCP) → execute → sync STATE/TASK-REGISTRY/ROADMAP. See .planning/README.md
 `;
 
 function buildProgram() {
   const program = new Command();
-  program.name("planning").description("DungeonBreak planning CLI: state, agents, tasks, questions, sprints, bundle (canonical agent context). Use --help on any subcommand. Agents: prefer planning MCP (dungeonbreak-planning) when available for orchestration.");
+  program
+    .name("planning")
+    .description("RepoPlanner: state, roadmap, tasks, bundle. Use --help <command> for details.")
+    .option("--root <path>", "Planning project root (default: cwd or REPOPLANNER_PROJECT_ROOT)");
+  program.configureHelp({ sortSubcommands: true });
   program.addHelpText("after", WORKFLOW_HELP_TEXT);
 
   program
@@ -2681,35 +2949,38 @@ function buildProgram() {
           console.log("%s  %s", c.ok ? "ok" : "FAIL", c.name);
         }
         if (!allOk) {
-          console.error("\nSetup incomplete. Install git, ensure you are in a repo with .planning (brownfield), or bootstrap .planning for greenfield. See .planning/README.md.");
+          console.error(
+            "\nSetup incomplete. Install git, ensure you are in a repo with .planning (brownfield), or run `planning init` / `planning setup init` to bootstrap .planning (greenfield). See RepoPlanner README / INSTALL.md.",
+          );
           process.exitCode = 1;
         }
       }
     });
 
-  program
-    .command("migrate-planning")
-    .description("Migrate planning markdown to REQUIREMENTS.xml")
-    .action(() => migratePlanningMarkdown());
+  const runInitCmd = async (opts) => {
+    try {
+      await runPlanningInit(opts);
+    } catch (e) {
+      console.error(e?.message ?? e);
+      process.exitCode = 1;
+    }
+  };
+
+  setupCmd
+    .command("init")
+    .description(
+      "Greenfield: create .planning/, copy templates, core XML, phase 01 plan/summary, optional AGENTS.md at repo root.",
+    )
+    .option("--force", "Overwrite bootstrap files if they already exist (destructive).")
+    .option("--no-agents-md", "Do not create AGENTS.md.")
+    .action(runInitCmd);
 
   program
-    .command("migrate-roadmap")
-    .description("Migrate roadmap from REQUIREMENTS.xml")
-    .action(() => migrateRoadmapFromReferences());
-
-  program
-    .command("migrate-phases")
-    .description("Migrate phase markdown to XML")
-    .action(() => migratePhaseMarkdown());
-
-  program
-    .command("migrate-all")
-    .description("Run all migrations")
-    .action(async () => {
-      await migratePlanningMarkdown();
-      await migrateRoadmapFromReferences();
-      await migratePhaseMarkdown();
-    });
+    .command("init")
+    .description("Alias for planning setup init — bootstrap .planning in the project root.")
+    .option("--force", "Overwrite bootstrap files if they already exist (destructive).")
+    .option("--no-agents-md", "Do not create AGENTS.md.")
+    .action(runInitCmd);
 
   return program;
 }
@@ -2718,7 +2989,7 @@ async function main() {
   const program = buildProgram();
   const argv = process.argv.slice(2);
   const top = argv[0];
-  if (top && !["cleanup", "help", "iterate", "iterate-tasks", "setup"].includes(top)) {
+  if (top && !["cleanup", "help", "init", "iterate", "iterate-tasks", "setup"].includes(top)) {
     await cleanupInactiveAgents({ silent: true });
   }
   await program.parseAsync(process.argv);

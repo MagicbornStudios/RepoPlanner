@@ -27,6 +27,18 @@ If the repo already has the submodule (e.g. after clone):
 git submodule update --init --recursive
 ```
 
+### Bootstrap `.planning/` (greenfield)
+
+From the **host repo root** (where `.planning` should live):
+
+```bash
+node vendor/repo-planner/scripts/loop-cli.mjs init
+```
+
+This copies XML/MD templates into `.planning/templates/`, writes `STATE.xml`, `TASK-REGISTRY.xml`, `ROADMAP.xml`, `DECISIONS.xml`, `ERRORS-AND-ATTEMPTS.xml`, `REQUIREMENTS.xml`, `planning-config.toml`, `reports/.gitkeep`, phase folder `phases/01-greenfield/` with `01-01-PLAN.xml` and `01-01-SUMMARY.xml`, and creates **`AGENTS.md`** at the repo root unless it already exists. Use **`--force`** to overwrite those bootstrap files; **`--no-agents-md`** to skip `AGENTS.md`.
+
+Then run `planning setup checklist` to verify git + planning files.
+
 ## 2. Path alias (Next.js app)
 
 So you can `import { PlanningCockpit } from "@/vendor/repo-planner"`, add a path in your Next app’s `tsconfig.json`. If the app lives in e.g. `docs-site/`:
