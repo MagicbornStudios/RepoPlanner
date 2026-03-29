@@ -6,11 +6,21 @@ import path from "node:path";
 import http from "node:http";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
+import { runPlanningEmbedBuildSync, formatEmbedBuildLogLine } from "./lib/embed-builtin-packs-build.mjs";
 import { XMLParser } from "fast-xml-parser";
 import TOML from "@iarna/toml";
 import ejs from "ejs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+function getRepoPlannerPackageVersion() {
+  try {
+    const pkgPath = path.join(__dirname, "..", "package.json");
+    return JSON.parse(readFileSync(pkgPath, "utf8")).version ?? "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+}
 
 function getRoot() {
   if (global.__planningRoot) return global.__planningRoot;
@@ -2168,6 +2178,7 @@ function buildProgram() {
   program
     .name("planning")
     .description("RepoPlanner: state, roadmap, tasks, bundle. Use --help <command> for details.")
+    .version(getRepoPlannerPackageVersion(), "-V, --version", "Print repo-planner package version")
     .option("--root <path>", "Planning project root (default: cwd or REPOPLANNER_PROJECT_ROOT)");
   program.configureHelp({ sortSubcommands: true });
   program.addHelpText("after", WORKFLOW_HELP_TEXT);
@@ -3018,6 +3029,47 @@ function buildProgram() {
       const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
       for (const e of entries) {
         console.log(e.name + (e.isDirectory() ? "/" : ""));
+      }
+    });
+
+  const packCmd = program.command("pack").description("Planning pack helpers (static JSON for in-browser cockpit embeds).");
+  packCmd
+    .command("embed-build")
+    .description(
+      "Write builtin-packs.json: snapshot of .planning (rp-builtin-init) and optional docs folder (.md/.mdx bodies, front matter stripped).",
+    )
+    .requiredOption("-o, --out <file>", "Output JSON path (relative to cwd unless absolute)")
+    .option(
+      "--docs-dir <path>",
+      "Directory of markdown/MDX for the rp-builtin-docs pack (relative to project --root unless absolute); omit for init-only",
+    )
+    .option("--planning-dir <path>", "Override .planning directory (default: <root>/.planning)")
+    .option("--docs-path-prefix <prefix>", "Virtual path prefix in JSON for docs files (default: docs/repo-planner)")
+    .action(async (opts) => {
+      const outFile = path.isAbsolute(opts.out) ? opts.out : path.resolve(process.cwd(), opts.out);
+      const projectRoot = ROOT;
+      const docsDir = opts.docsDir
+        ? path.isAbsolute(opts.docsDir)
+          ? opts.docsDir
+          : path.resolve(projectRoot, opts.docsDir)
+        : null;
+      const planningDir = opts.planningDir
+        ? path.isAbsolute(opts.planningDir)
+          ? opts.planningDir
+          : path.resolve(projectRoot, opts.planningDir)
+        : undefined;
+      try {
+        const payload = runPlanningEmbedBuildSync({
+          projectRoot,
+          outFile,
+          docsDir,
+          planningDir,
+          docsPathPrefix: opts.docsPathPrefix,
+        });
+        console.log(formatEmbedBuildLogLine(projectRoot, outFile, payload));
+      } catch (e) {
+        console.error(e?.message ?? e);
+        process.exitCode = 1;
       }
     });
 

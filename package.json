@@ -2,10 +2,18 @@
   "name": "repo-planner",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "description": "Planning cockpit UI and API; consumed by host app. Host must provide dependencies and @/ path to its components/lib.",
   "exports": {
     ".": "./index.tsx",
-    "./planning.css": "./planning.css"
+    "./host": "./host.tsx",
+    "./planning-pack": "./planning-pack.tsx",
+    "./planning.css": "./planning.css",
+    "./workspace-storage": "./lib/workspace-storage.ts",
+    "./book-planning-context": "./lib/book-planning-context.ts",
+    "./embed-builtin-packs-build": "./scripts/lib/embed-builtin-packs-build.mjs"
   },
   "peerDependencies": {
     "next": ">=14",
@@ -38,6 +46,7 @@
     "@assistant-ui/react": "^0.12.0",
     "@assistant-ui/react-ui": "^0.2.0",
     "diff": "^5.2.0",
+    "gray-matter": "^4.0.3",
     "next": "^14.2.0",
     "typescript": "^5.6.0"
   }
