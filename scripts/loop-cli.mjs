@@ -34,7 +34,12 @@ function getPlanningDir() {
 function getPhasesDir() {
   return path.join(getPlanningDir(), "phases");
 }
+/** Default `.planning/reports`; override with `REPOPLANNER_REPORTS_DIR` (absolute or relative to project root) to keep `.planning/` free of telemetry/report files. */
 function getReportsDir() {
+  const raw = process.env.REPOPLANNER_REPORTS_DIR?.trim();
+  if (raw) {
+    return path.isAbsolute(raw) ? raw : path.join(getRoot(), raw);
+  }
   return path.join(getPlanningDir(), "reports");
 }
 function getTemplatesDir() {
@@ -47,7 +52,6 @@ function getConfigPath() {
 const ROOT = getRoot();
 const PLANNING_DIR = getPlanningDir();
 const PHASES_DIR = getPhasesDir();
-const REPORTS_DIR = getReportsDir();
 const TEMPLATES_DIR = getTemplatesDir();
 const CONFIG_PATH = getConfigPath();
 const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_" });
@@ -743,14 +747,330 @@ async function writePlanningBootstrapFile(relPath, content, force) {
   return { relPath, skipped: false };
 }
 
+async function writeRepoRootFileIfMissing(relPath, content) {
+  const full = path.join(ROOT, relPath);
+  if (await pathExists(full)) return { relPath, skipped: true };
+  await fs.mkdir(path.dirname(full), { recursive: true });
+  await fs.writeFile(full, content, "utf8");
+  return { relPath, skipped: false };
+}
+
+/** If repo root is missing narrative files, copy from `.planning/*.md` before those paths are removed. */
+async function migrateNarrativeMdFromDotPlanningToRoot() {
+  const pReq = path.join(PLANNING_DIR, "REQUIREMENTS.md");
+  const rReq = path.join(ROOT, "REQUIREMENTS.md");
+  if ((await pathExists(pReq)) && !(await pathExists(rReq))) {
+    await fs.copyFile(pReq, rReq);
+    console.log("migrate  .planning/REQUIREMENTS.md → REQUIREMENTS.md (repo root)");
+  }
+}
+
+/** Minimal layout: no narrative `REQUIREMENTS.md` or `reports/` inside `.planning/` (root `REQUIREMENTS.md` only). */
+async function pruneDotPlanningNarrativeAndReports() {
+  await fs.rm(path.join(PLANNING_DIR, "reports"), { recursive: true, force: true }).catch(() => {});
+  await fs.rm(path.join(PLANNING_DIR, "REQUIREMENTS.md"), { force: true }).catch(() => {});
+  await fs.rm(path.join(PLANNING_DIR, "IMPLEMENTATION_PLAN.md"), { force: true }).catch(() => {});
+}
+
+/** Rich `.planning/AGENTS.md`: roadmap + task registry as execution truth; atoms/molecules/organisms; CLI optional. */
+function getMinimalPlanningAgentsMd() {
+  return [
+    "# `.planning/AGENTS.md` — planning for agents (roadmap-first)",
+    "",
+    "Companion to **repository root** `AGENTS.md`. **You do not need the planning CLI** for day-to-day work: edit **`REQUIREMENTS.md`**, **`.planning/ROADMAP.xml`**, **`.planning/TASK-REGISTRY.xml`**, **`.planning/STATE.xml`**, and **section** `task-registry.mdx` in git. The **Repo Planner cockpit** (e.g. `/docs/tools/repo-planner`) is for **analysis and UI-side editing**; see site docs **Repo Planner → Integration** for product direction (multi-project, packs, local persistence).",
+    "",
+    "## Trigger phrases → what to do",
+    "",
+    "| User says (examples) | Your first reads | Then |",
+    "| --- | --- | --- |",
+    "| *Plan this*, *break this down*, *roadmap this* | Root `REQUIREMENTS.md`, `.planning/ROADMAP.xml`, `.planning/TASK-REGISTRY.xml` | Extend **roadmap** phases / goals; add or split **tasks**; align narrative tables in `REQUIREMENTS.md` |",
+    "| *What's next?*, *what should I work on?* | `STATE.xml` (`next-action`), `TASK-REGISTRY.xml` (first non-`done` task), relevant section **task-registry.mdx** | Pick **one** task; implement; set task **`done`** in XML or section registry; refresh `next-action` |",
+    "| *Planning docs*, *planning loop*, *Ralph loop* | Root `AGENTS.md`, then **this file** | Read state → one task → verify (root `AGENTS.md` gates) → commit doc changes |",
+    "| *Requirements*, *scope*, *PRD* | Root `REQUIREMENTS.md` | Edit narrative; stub `.planning/REQUIREMENTS.xml` optional for XML-only tools |",
+    "| *Decisions*, *ADRs* | `.planning/DECISIONS.xml` | Append **Decision** atoms |",
+    "",
+    "## Where truth lives",
+    "",
+    "| Artifact | Path | Role |",
+    "| --- | --- | --- |",
+    "| Narrative + cross-cutting checklist | Repo root `REQUIREMENTS.md` (incl. **Cross-cutting queue** section) | **What** to build; roadmap **tables**; pointers to section registries |",
+    "| **Phase timeline** | `.planning/ROADMAP.xml` | **When / at what altitude** — phase goals, `status`, `depends` |",
+    "| **Task graph** | `.planning/TASK-REGISTRY.xml` | **Units of work** — `goal`, `keywords`, `commands`, `@_status` |",
+    "| **Current pointer** | `.planning/STATE.xml` | `current-phase`, `next-action`, optional `agent-registry` |",
+    "| Decisions | `.planning/DECISIONS.xml` | **Decision** atoms |",
+    "| Section work | `apps/portfolio/content/docs/<section>/task-registry.mdx` | **Authoritative ids** per product area |",
+    "| Playbook | **This file** | Atoms / molecules / organisms + XML patterns |",
+    "",
+    "There is **no** `IMPLEMENTATION_PLAN.md`. Shipped vs planned history belongs in **`REQUIREMENTS.md`** tables, **section registries**, and task **`done`** status — not a second markdown queue file.",
+    "",
+    "---",
+    "",
+    "## Atoms — smallest planning units",
+    "",
+    "| Atom | Meaning | In Markdown (typical) |",
+    "| --- | --- | --- |",
+    "| **Goal** | Outcome; success criteria | H3 or table **Goal** column |",
+    "| **Scope** | In/out | **Scope** / **Non-goals** bullets |",
+    "| **File** | Path + note | **Files** list |",
+    "| **Command** | Verify | **Verification** — `pnpm run build`, `pnpm run lint`, etc. |",
+    "| **Decision** | Choice + impact | `DECISIONS.xml` or dated **Decision:** line in `REQUIREMENTS.md` **Notes** |",
+    "| **Keyword** | Tags | **Keywords:** |",
+    "| **Task** | Work unit + status | `TASK-REGISTRY.xml` `<task>` or section registry row |",
+    "| **Verification** | Proof | Same as **Command** / gates in root `AGENTS.md` |",
+    "| **Reference** | Link | MDX / URL |",
+    "",
+    "## Molecules — composed blocks",
+    "",
+    "| Molecule | Example section |",
+    "| --- | --- |",
+    "| **FilesBlock** | `## Files touched` |",
+    "| **CommandsBlock** | `## Verification` |",
+    "| **DecisionsBlock** | `## Decisions` |",
+    "| **TasksBlock** | `## Tasks` |",
+    "| **KeywordsBlock** | `**Keywords:**` |",
+    "",
+    "## Organisms — document shapes",
+    "",
+    "| Organism | Maps to |",
+    "| --- | --- |",
+    "| **PlanDocument** | `REQUIREMENTS.md` subsection + `TASK-REGISTRY.xml` tasks |",
+    "| **SummaryDocument** | Short **Verification** note after a task; optional dated line in `REQUIREMENTS.md` |",
+    "| **RoadmapDocument** | `ROADMAP.xml` + roadmap tables in `REQUIREMENTS.md` |",
+    "",
+    "---",
+    "",
+    "## `REQUIREMENTS.md` — use for",
+    "",
+    "- **H2** per domain; roadmap **tables** (Phase / Scope / Status / Notes).",
+    "- **Cross-cutting queue** — checkbox items that are not worth a full `TASK-REGISTRY` task yet.",
+    "- Links to `apps/portfolio/content/docs/<section>/task-registry.mdx`.",
+    "",
+    "## `TASK-REGISTRY.xml` — example",
+    "",
+    "```xml",
+    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
+    "<task-registry>",
+    "  <phase id=\"01\">",
+    "    <task id=\"01-01\" agent-id=\"\" status=\"planned\">",
+    "      <goal>Imperative one-line outcome.</goal>",
+    "      <keywords>area,topic</keywords>",
+    "      <commands>",
+    "        <command>pnpm run lint</command>",
+    "      </commands>",
+    "      <depends></depends>",
+    "    </task>",
+    "  </phase>",
+    "</task-registry>",
+    "```",
+    "",
+    "Edit **`@_status`** (`planned` | `in-progress` | `done` | `blocked`) in git. Optional: `pnpm planning task-update` if you use the CLI.",
+    "",
+    "## `ROADMAP.xml` — phase row",
+    "",
+    "```xml",
+    "<phase id=\"01\">",
+    "  <goal>Phase intent.</goal>",
+    "  <status>active</status>",
+    "  <depends></depends>",
+    "</phase>",
+    "```",
+    "",
+    "## `STATE.xml`",
+    "",
+    "- **`next-action`** — one concrete step for the next agent turn.",
+    "- **`references`** — `REQUIREMENTS.md`, `.planning/AGENTS.md`, key `.xml` paths (no `IMPLEMENTATION_PLAN.md`).",
+    "- **`agent-registry`** — optional; only if you adopt CLI agent ids.",
+    "",
+    "## Optional planning CLI",
+    "",
+    "Root **`pnpm planning …`** is **not** part of the default loop. Operators may use **`snapshot`**, **`checklist`**, or **`task-update`** for tooling; reports go to **`REPOPLANNER_REPORTS_DIR`** (e.g. `.planning-reports/`). Prefer **cockpit + git** for editing.",
+    "",
+    "## Minimal layout note",
+    "",
+    "No `.planning/templates/` in minimal init. Upstream templates: `vendor/repo-planner/.planning/templates/`.",
+    "",
+  ].join("\n");
+}
+
+/** Bare bootstrap: `.planning/` = XML + `planning-config.toml` + `.planning/AGENTS.md` only. Narrative **`REQUIREMENTS.md`** at **repo root** (no `IMPLEMENTATION_PLAN.md`). No `templates/`, `phases/`, `reports/` under `.planning/`. */
+async function runPlanningInitMinimal(opts) {
+  const force = opts.force === true;
+  const wantAgents = opts.agentsMd !== false;
+  const archivePointer = ".planning-archive/2026-03-29-pre-barebones";
+
+  await fs.mkdir(PLANNING_DIR, { recursive: true });
+  const today = new Date().toISOString().slice(0, 10);
+  const cliHint = await resolvePlanningCliInvokeHint();
+
+  if (force) {
+    await migrateNarrativeMdFromDotPlanningToRoot();
+    await pruneDotPlanningNarrativeAndReports();
+    console.log("prune  .planning/reports + narrative .md under .planning/ (minimal layout)");
+  }
+
+  const roadmapXml = `<?xml version="1.0" encoding="UTF-8"?>
+<roadmap>
+  <phase id="01">
+    <goal>Keep repo-root REQUIREMENTS.md (roadmap tables + Cross-cutting queue) aligned with ROADMAP.xml, TASK-REGISTRY.xml, and STATE for agents and Repo Planner cockpit.</goal>
+    <status>active</status>
+    <depends></depends>
+  </phase>
+  <doc-flow>
+    <doc name="REQUIREMENTS.md">Primary narrative PRD + cross-cutting checklist at repo root (not under .planning/).</doc>
+    <doc name=".planning/ROADMAP.xml">Phase timeline for RepoPlanner.</doc>
+    <doc name=".planning/TASK-REGISTRY.xml">Task graph and status.</doc>
+    <doc name=".planning/AGENTS.md">Planning playbook for agents (roadmap-first).</doc>
+  </doc-flow>
+</roadmap>
+`;
+
+  const stateXml = `<?xml version="1.0" encoding="UTF-8"?>
+<state>
+  <agent-registry />
+  <current-phase>01</current-phase>
+  <current-plan>bootstrap</current-plan>
+  <status>active</status>
+  <next-action>Edit REQUIREMENTS.md, .planning/ROADMAP.xml, TASK-REGISTRY.xml, and STATE; read .planning/AGENTS.md. Migrate narrative from ${archivePointer}/ if needed. Optional: ${cliHint} snapshot for a merged CLI view.</next-action>
+  <references>
+    <reference>REQUIREMENTS.md</reference>
+    <reference>.planning/AGENTS.md</reference>
+    <reference>.planning/ROADMAP.xml</reference>
+    <reference>.planning/TASK-REGISTRY.xml</reference>
+    <reference>.planning/DECISIONS.xml</reference>
+  </references>
+  <agent-id-policy>
+    <format>agent-YYYYMMDD-xxxx</format>
+    <rule>Optional: register a unique id in STATE.xml before claiming tasks if you use CLI task-update.</rule>
+    <generator>${cliHint} new-agent-id</generator>
+  </agent-id-policy>
+</state>
+`;
+
+  const taskRegXml = `<?xml version="1.0" encoding="UTF-8"?>
+<task-registry>
+  <phase id="01">
+    <task id="01-01" agent-id="" status="planned">
+      <goal>Migrate any remaining narrative from ${archivePointer}/ into repo-root REQUIREMENTS.md; align ROADMAP.xml and TASK-REGISTRY.xml with real open work.</goal>
+      <keywords>bootstrap,migration,requirements,roadmap</keywords>
+      <commands>
+        <command>pnpm run lint</command>
+      </commands>
+      <depends></depends>
+    </task>
+  </phase>
+</task-registry>
+`;
+
+  const decisionsXml = `<?xml version="1.0" encoding="UTF-8"?>
+<decisions>
+</decisions>
+`;
+
+  const errorsXml = `<?xml version="1.0" encoding="UTF-8"?>
+<errors-and-attempts />
+`;
+
+  const reqXml = `<?xml version="1.0" encoding="UTF-8"?>
+<planning-references>
+  <doc>
+    <path>REQUIREMENTS.md</path>
+    <content><![CDATA[
+# Requirements (stub)
+
+Edit **REQUIREMENTS.md** at the repository root. This CDATA block is a bootstrap placeholder for tools that read REQUIREMENTS.xml only.
+]]></content>
+  </doc>
+</planning-references>
+`;
+
+  const configToml = `[planning]
+sprintSize = 5
+currentProfile = "human"
+conventionsPaths = ["AGENTS.md", "REQUIREMENTS.md", ".planning/AGENTS.md"]
+
+[profiles.human]
+description = "Default human view."
+
+[profiles.agent]
+description = "Agent perspective; defaultJson = true."
+defaultJson = true
+`;
+
+  const requirementsMd = `# Requirements (monorepo)
+
+Restarted **${today}** — this file lives at **repo root** (not \`.planning/\`). **Migrate** substantive prose from the archive folder (if present):
+
+- \`${archivePointer}/REQUIREMENTS.md\`
+
+**Execution queue:** use **roadmap tables** here, **\`.planning/ROADMAP.xml\`**, **\`.planning/TASK-REGISTRY.xml\`**, and the **Cross-cutting queue** section (checkboxes for small items). There is **no** \`IMPLEMENTATION_PLAN.md\`.
+
+Section planning for the site still lives under \`apps/portfolio/content/docs/<section>/\` per root **AGENTS.md**.
+
+## Scope (fill in)
+
+- Books, reader, site stack, documentation — restore headings and tables from the archive as you merge.
+`;
+
+  const planningAgentsMd = getMinimalPlanningAgentsMd();
+
+  for (const [rel, body] of [["REQUIREMENTS.md", requirementsMd]]) {
+    const r = await writeRepoRootFileIfMissing(rel, body);
+    console.log(r.skipped ? `skip  ${r.relPath} (repo root, exists)` : `write ${r.relPath} (repo root)`);
+  }
+
+  const planningWrites = [
+    ["planning-config.toml", configToml],
+    ["STATE.xml", stateXml],
+    ["TASK-REGISTRY.xml", taskRegXml],
+    ["ROADMAP.xml", roadmapXml],
+    ["DECISIONS.xml", decisionsXml],
+    ["ERRORS-AND-ATTEMPTS.xml", errorsXml],
+    ["REQUIREMENTS.xml", reqXml],
+    ["AGENTS.md", planningAgentsMd],
+  ];
+
+  for (const [rel, body] of planningWrites) {
+    const r = await writePlanningBootstrapFile(rel, body, force);
+    console.log(r.skipped ? `skip  .planning/${r.relPath}` : `write .planning/${r.relPath}`);
+  }
+
+  if (wantAgents) {
+    const agentsPath = path.join(ROOT, "AGENTS.md");
+    const pkgRoot = getRepoPlannerPackageRoot();
+    const agentsTpl = await readIfExists(path.join(pkgRoot, ".planning", "templates", "AGENTS-TEMPLATE.md"));
+    if (agentsTpl) {
+      if (force || !(await pathExists(agentsPath))) {
+        await fs.writeFile(agentsPath, agentsTpl, "utf8");
+        console.log("write AGENTS.md (repo root)");
+      } else {
+        console.log("skip  AGENTS.md (already exists; use --force to overwrite)");
+      }
+    } else {
+      console.error("warning: AGENTS-TEMPLATE.md missing; skipped AGENTS.md");
+    }
+  } else {
+    console.log("skip  AGENTS.md (repo root) — --no-agents-md");
+  }
+
+  console.log(
+    "\nBootstrap complete (minimal): .planning/ has XML + planning-config.toml + AGENTS.md; REQUIREMENTS.md at repo root (roadmap + task registry in .planning/); no .planning/reports (set REPOPLANNER_REPORTS_DIR for CLI telemetry).",
+  );
+}
+
 async function runPlanningInit(opts) {
   const force = opts.force === true;
+  const minimal = opts.minimal === true;
   const wantAgents = opts.agentsMd !== false;
 
   const statePath = path.join(PLANNING_DIR, "STATE.xml");
   if (!force && (await pathExists(statePath))) {
     console.error("Refusing: .planning/STATE.xml already exists. Use --force to overwrite bootstrap outputs.");
     process.exitCode = 1;
+    return;
+  }
+
+  if (minimal) {
+    await runPlanningInitMinimal({ force, agentsMd: opts.agentsMd });
     return;
   }
 
@@ -763,7 +1083,7 @@ async function runPlanningInit(opts) {
   }
 
   await fs.mkdir(PLANNING_DIR, { recursive: true });
-  await fs.mkdir(REPORTS_DIR, { recursive: true });
+  await fs.mkdir(getReportsDir(), { recursive: true });
   await fs.mkdir(TEMPLATES_DIR, { recursive: true });
   const phaseDirPath = path.join(PHASES_DIR, INIT_PHASE_DIR);
   await fs.mkdir(phaseDirPath, { recursive: true });
@@ -913,7 +1233,7 @@ defaultJson = true
     console.log(r.skipped ? `skip  .planning/${r.relPath}` : `write .planning/${r.relPath}`);
   }
 
-  const gitkeepPath = path.join(REPORTS_DIR, ".gitkeep");
+  const gitkeepPath = path.join(getReportsDir(), ".gitkeep");
   if (force || !(await pathExists(gitkeepPath))) {
     await fs.writeFile(gitkeepPath, "\n", "utf8");
     console.log("write .planning/reports/.gitkeep");
@@ -1091,7 +1411,7 @@ async function migratePlanningMarkdown() {
 }
 
 async function migratePhaseMarkdown() {
-  const entries = await fs.readdir(PHASES_DIR, { withFileTypes: true });
+  const entries = await fs.readdir(PHASES_DIR, { withFileTypes: true }).catch(() => []);
   const generatedAt = new Date().toISOString().slice(0, 10);
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
@@ -1447,9 +1767,9 @@ async function snapshot(opts = {}) {
 
 /** Append one line to .planning/reports/usage.jsonl for tracking how often agents run key commands. */
 async function appendUsageLog(command) {
-  const usagePath = path.join(REPORTS_DIR, "usage.jsonl");
+  const usagePath = path.join(getReportsDir(), "usage.jsonl");
   const line = JSON.stringify({ at: new Date().toISOString(), command }) + "\n";
-  await fs.mkdir(REPORTS_DIR, { recursive: true }).catch(() => {});
+  await fs.mkdir(getReportsDir(), { recursive: true }).catch(() => {});
   await fs.appendFile(usagePath, line, "utf8").catch(() => {});
 }
 
@@ -1706,13 +2026,13 @@ async function buildAgentLoopBundle(opts = {}) {
 
 async function generateReportMd() {
   await cleanupInactiveAgents({ silent: true });
-  await fs.mkdir(REPORTS_DIR, { recursive: true });
+  await fs.mkdir(getReportsDir(), { recursive: true });
   const bundle = await buildAgentLoopBundle();
   const systemMetrics = await buildSystemMetrics();
   const verbatimSnapshot = await snapshotToString({ similarity: true });
   systemMetrics.snapshotTokensApprox = verbatimSnapshot ? estimateTokens(verbatimSnapshot) : 0;
   systemMetrics.bundleTokensApprox = estimateTokens(JSON.stringify(bundle));
-  const metricsPath = path.join(REPORTS_DIR, "metrics.jsonl");
+  const metricsPath = path.join(getReportsDir(), "metrics.jsonl");
   await fs.appendFile(metricsPath, JSON.stringify(systemMetrics) + "\n", "utf8").catch(() => {});
   const verbatimNewAgentIdLine = getNewAgentIdLine("repr");
   const kpis = await buildReportKpis();
@@ -1739,12 +2059,12 @@ async function generateReportMd() {
     reviewItems,
     systemMetrics,
   });
-  const latestPath = path.join(REPORTS_DIR, "latest.md");
+  const latestPath = path.join(getReportsDir(), "latest.md");
   await fs.writeFile(latestPath, md, "utf8");
-  const existing = await fs.readdir(REPORTS_DIR).catch(() => []);
+  const existing = await fs.readdir(getReportsDir()).catch(() => []);
   for (const name of existing) {
     if (name.endsWith(".md") && name !== "latest.md") {
-      await fs.rm(path.join(REPORTS_DIR, name)).catch(() => {});
+      await fs.rm(path.join(getReportsDir(), name)).catch(() => {});
     }
   }
   return { path: latestPath };
@@ -1840,7 +2160,7 @@ async function openBrowser(url) {
 }
 
 const WORKFLOW_HELP_TEXT = `
-Agent loop: snapshot | new-agent-id → claim task → bundle --json (or MCP) → execute → sync STATE/TASK-REGISTRY/ROADMAP. See .planning/README.md
+Agent loop: snapshot | new-agent-id → claim task → bundle --json (or MCP) → execute → sync STATE/TASK-REGISTRY/ROADMAP. See AGENTS.md and .planning/AGENTS.md when present.
 `;
 
 function buildProgram() {
@@ -1989,7 +2309,7 @@ function buildProgram() {
     .option("--n <count>", "Last N entries", "30")
     .option("--json", "Output as JSON array")
     .action(async (opts) => {
-      const metricsPath = path.join(REPORTS_DIR, "metrics.jsonl");
+      const metricsPath = path.join(getReportsDir(), "metrics.jsonl");
       const content = await readIfExists(metricsPath);
       const lines = (content || "").trim().split("\n").filter(Boolean);
       const n = Math.max(1, parseInt(opts.n, 10) || 30);
@@ -2592,7 +2912,7 @@ function buildProgram() {
     .option("--port <n>", "Port for the report server", "3847")
     .option("--no-open", "Do not open browser automatically")
     .action(async (opts) => {
-      await fs.mkdir(REPORTS_DIR, { recursive: true });
+      await fs.mkdir(getReportsDir(), { recursive: true });
       try {
         await generateReportMd();
       } catch (e) {
@@ -2601,7 +2921,7 @@ function buildProgram() {
         return;
       }
       const port = parseInt(opts.port, 10) || 3847;
-      const server = createReportServer(REPORTS_DIR, port);
+      const server = createReportServer(getReportsDir(), port);
       server.listen(port, "127.0.0.1", () => {
         const url = `http://127.0.0.1:${port}/viewer.html`;
         console.log("Report viewer: %s", url);
@@ -2957,9 +3277,10 @@ function buildProgram() {
       }
     });
 
-  const runInitCmd = async (opts) => {
+  const runInitCmd = async (opts, cmd) => {
     try {
-      await runPlanningInit(opts);
+      const fromCmd = cmd && typeof cmd.opts === "function" ? cmd.opts() : {};
+      await runPlanningInit({ ...fromCmd, ...(opts && typeof opts === "object" ? opts : {}) });
     } catch (e) {
       console.error(e?.message ?? e);
       process.exitCode = 1;
@@ -2972,6 +3293,10 @@ function buildProgram() {
       "Greenfield: create .planning/, copy templates, core XML, phase 01 plan/summary, optional AGENTS.md at repo root.",
     )
     .option("--force", "Overwrite bootstrap files if they already exist (destructive).")
+    .option(
+      "--minimal",
+      "Bare .planning: XML + planning-config.toml + .planning/AGENTS.md; narrative REQUIREMENTS.md at repo root; no IMPLEMENTATION_PLAN.md; no .planning/reports (use REPOPLANNER_REPORTS_DIR).",
+    )
     .option("--no-agents-md", "Do not create AGENTS.md.")
     .action(runInitCmd);
 
@@ -2979,6 +3304,10 @@ function buildProgram() {
     .command("init")
     .description("Alias for planning setup init — bootstrap .planning in the project root.")
     .option("--force", "Overwrite bootstrap files if they already exist (destructive).")
+    .option(
+      "--minimal",
+      "Bare .planning: XML + planning-config.toml + .planning/AGENTS.md; narrative REQUIREMENTS.md at repo root; no IMPLEMENTATION_PLAN.md; no .planning/reports (use REPOPLANNER_REPORTS_DIR).",
+    )
     .option("--no-agents-md", "Do not create AGENTS.md.")
     .action(runInitCmd);
 

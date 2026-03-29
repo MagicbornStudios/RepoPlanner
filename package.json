@@ -3,7 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "description": "Planning cockpit UI and API; consumed by host app. Host must provide dependencies and @/ path to its components/lib.",
+  "exports": {
+    ".": "./index.tsx",
+    "./planning.css": "./planning.css"
+  },
   "peerDependencies": {
+    "next": ">=14",
     "react": ">=18",
     "react-dom": ">=18",
     "lucide-react": "*",
