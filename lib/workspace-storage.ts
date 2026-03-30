@@ -1,8 +1,11 @@
+/// <reference path="../types/jszip.d.ts" />
 "use client";
 
 export const REPO_PLANNER_WORKSPACE_KEY = "repo-planner-workspace-v1";
 
 const MAX_BYTES = 4_500_000;
+const PACK_JSON_MIME = "application/json";
+const ZIP_MIME = "application/zip";
 
 export type PackFile = { path: string; content: string };
 
@@ -123,34 +126,94 @@ export function saveWorkspaceState(state: WorkspaceStateV1): { ok: true } | { ok
   }
 }
 
-export function readFilesAsPack(files: FileList | File[]): Promise<PlanningPack> {
-  const list = Array.from(files);
-  const id =
-    typeof crypto !== 'undefined' && 'randomUUID' in crypto
-      ? crypto.randomUUID()
-      : `pack-${Date.now()}`;
-  const name =
-    list.length === 1 && list[0]
-      ? list[0].name.replace(/\.[^.]+$/, '') || list[0].name
-      : `Pack (${list.length} files)`;
-  return Promise.all(
-    list.map(
-      (file) =>
-        new Promise<PackFile>((resolve, reject) => {
-          const path = file.name;
-          const reader = new FileReader();
-          reader.onload = () => {
-            const text = typeof reader.result === 'string' ? reader.result : '';
-            resolve({ path, content: text });
-          };
-          reader.onerror = () => reject(reader.error);
-          reader.readAsText(file);
-        }),
-    ),
-  ).then((fileRows) => ({
-    id,
+function createPackId(): string {
+  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `pack-${Date.now()}`;
+}
+
+function createPlanningPack(name: string, files: PackFile[]): PlanningPack {
+  return {
+    id: createPackId(),
     name,
     createdAt: new Date().toISOString(),
-    files: fileRows,
-  }));
+    files,
+  };
+}
+
+function readFileText(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+    reader.onerror = () => reject(reader.error);
+    reader.readAsText(file);
+  });
+}
+
+function normalizePackPath(path: string): string {
+  return path.replace(/\\/g, '/').replace(/^\.\//, '').trim();
+}
+
+function inferPackName(fileName: string): string {
+  return fileName.replace(/\.[^.]+$/, '') || fileName;
+}
+
+async function readZipAsPack(file: File): Promise<PlanningPack> {
+  const JSZip = (await import('jszip')).default;
+  const zip = await JSZip.loadAsync(file);
+  const files = await Promise.all(
+    Object.values(zip.files)
+      .filter((entry) => !entry.dir)
+      .map(async (entry) => ({
+        path: normalizePackPath(entry.name),
+        content: await entry.async('string'),
+      })),
+  );
+  if (!files.length) {
+    throw new Error('That zip did not contain any readable planning files.');
+  }
+  return createPlanningPack(inferPackName(file.name), files);
+}
+
+async function readJsonAsPack(file: File): Promise<PlanningPack> {
+  const raw = await readFileText(file);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error('That JSON file could not be parsed as a planning pack.');
+  }
+  const pack = sanitizePlanningPack(parsed);
+  if (!pack) {
+    throw new Error('That JSON file is not a valid planning pack export.');
+  }
+  return createPlanningPack(pack.name || inferPackName(file.name), pack.files);
+}
+
+export async function readPreviewUploadAsPack(files: FileList | File[]): Promise<PlanningPack> {
+  const list = Array.from(files);
+  if (!list.length) {
+    throw new Error('Choose a planning pack export or .planning zip to preview.');
+  }
+  if (list.length === 1) {
+    const [file] = list;
+    const lower = file.name.toLowerCase();
+    if (lower.endsWith('.zip') || file.type === ZIP_MIME) return readZipAsPack(file);
+    if (lower.endsWith('.json') || file.type === PACK_JSON_MIME) return readJsonAsPack(file);
+  }
+  return readFilesAsPack(list);
+}
+
+export function readFilesAsPack(files: FileList | File[]): Promise<PlanningPack> {
+  const list = Array.from(files);
+  const name =
+    list.length === 1 && list[0]
+      ? inferPackName(list[0].name)
+      : `Pack (${list.length} files)`;
+  return Promise.all(
+    list.map(async (file) => ({
+      path: normalizePackPath(file.name),
+      content: await readFileText(file),
+    })),
+  ).then((fileRows) => createPlanningPack(name, fileRows));
 }

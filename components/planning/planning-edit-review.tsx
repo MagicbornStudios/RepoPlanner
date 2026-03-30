@@ -3,10 +3,10 @@
 import { useMemo, useState } from "react";
 import { diffLines } from "diff";
 import { ChevronDown, ChevronRight, FileCode, FileText } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn } from "@/lib/utils";
+import { Button } from "../ui/button";
+import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
+import { ScrollArea } from "../ui/scroll-area";
+import { cn } from "../../lib/utils";
 
 export type PlanningEdit = {
   path: string;

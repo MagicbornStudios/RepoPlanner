@@ -11,7 +11,7 @@ import {
 import { AssistantMessage, EditComposer, UserMessage } from "@assistant-ui/react-ui";
 import { motion } from "motion/react";
 import { SendHorizonalIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "../ui/button";
 import {
   PlanningEditReview,
   type PlanningEdit,

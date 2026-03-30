@@ -43,18 +43,30 @@ export function buildEmbedBuiltinPacksPayload(opts) {
   const docsFiles = [];
   const docsDir = opts.docsDir;
   if (docsDir && fs.existsSync(docsDir)) {
-    for (const name of fs.readdirSync(docsDir)) {
-      if (!name.endsWith(".mdx") && !name.endsWith(".md")) continue;
-      const full = path.join(docsDir, name);
-      if (!fs.statSync(full).isFile()) continue;
-      const raw = fs.readFileSync(full, "utf8");
-      const { content } = matter(raw);
-      const outName = name.replace(/\.mdx$/, ".md");
-      docsFiles.push({
-        path: `${docsPathPrefix}/${outName}`,
-        content: (content ?? "").trim() || "",
-      });
+    const skipDirs = new Set(["node_modules", ".git", "dist", ".next", "__pycache__"]);
+    function walkDocs(absDir, relPrefix) {
+      const entries = fs.readdirSync(absDir, { withFileTypes: true });
+      for (const ent of entries) {
+        const full = path.join(absDir, ent.name);
+        if (ent.isDirectory()) {
+          if (skipDirs.has(ent.name)) continue;
+          const nextRel = relPrefix ? `${relPrefix}/${ent.name}` : ent.name;
+          walkDocs(full, nextRel);
+          continue;
+        }
+        if (!ent.isFile()) continue;
+        if (!ent.name.endsWith(".mdx") && !ent.name.endsWith(".md")) continue;
+        const relFile = relPrefix ? `${relPrefix}/${ent.name}` : ent.name;
+        const raw = fs.readFileSync(full, "utf8");
+        const { content } = matter(raw);
+        const outRel = relFile.replace(/\.mdx$/, ".md");
+        docsFiles.push({
+          path: `${docsPathPrefix}/${outRel}`,
+          content: (content ?? "").trim() || "",
+        });
+      }
     }
+    walkDocs(docsDir, "");
     docsFiles.sort((a, b) => a.path.localeCompare(b.path));
   }
 

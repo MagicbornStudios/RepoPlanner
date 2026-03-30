@@ -1,21 +1,81 @@
 {
   "name": "repo-planner",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
   "engines": {
     "node": ">=22.0.0"
   },
-  "description": "Planning cockpit UI and API; consumed by host app. Host must provide dependencies and @/ path to its components/lib.",
+  "description": "Embeddable planning cockpit, parsing helpers, and CLI entrypoint for roadmap/state/task-registry loops.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MagicbornStudios/RepoPlanner.git"
+  },
+  "homepage": "https://github.com/MagicbornStudios/RepoPlanner",
+  "bugs": {
+    "url": "https://github.com/MagicbornStudios/RepoPlanner/issues"
+  },
+  "keywords": [
+    "planning",
+    "roadmap",
+    "task-registry",
+    "cli",
+    "nextjs",
+    "workflow"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    ".planning",
+    "api",
+    "components",
+    "lib",
+    "scripts",
+    "types",
+    "cockpit-host-context.ts",
+    "host.tsx",
+    "index.tsx",
+    "INSTALL.md",
+    "README.md",
+    "planning-pack.tsx",
+    "planning.css",
+    "STYLING.md",
+    "tsconfig.json"
+  ],
+  "bin": {
+    "repo-planner": "./scripts/loop-cli.mjs"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^5.5.9",
+    "jszip": "^3.10.1"
+  },
   "exports": {
     ".": "./index.tsx",
     "./host": "./host.tsx",
+    "./cockpit-data": "./lib/planning-cockpit-data-source.ts",
     "./planning-pack": "./planning-pack.tsx",
     "./planning.css": "./planning.css",
     "./workspace-storage": "./lib/workspace-storage.ts",
-    "./book-planning-context": "./lib/book-planning-context.ts",
-    "./embed-builtin-packs-build": "./scripts/lib/embed-builtin-packs-build.mjs"
+    "./cockpit-host-context": "./cockpit-host-context.ts",
+    "./embed-builtin-packs-build": "./scripts/lib/embed-builtin-packs-build.mjs",
+    "./api/planning-state/route": "./api/planning-state/route.ts",
+    "./api/planning-metrics/route": "./api/planning-metrics/route.ts",
+    "./api/planning-roadmap/route": "./api/planning-roadmap/route.ts",
+    "./api/planning-reports/latest/route": "./api/planning-reports/latest/route.ts",
+    "./api/planning-cli/run/route": "./api/planning-cli/run/route.ts",
+    "./api/planning-edits/apply/route": "./api/planning-edits/apply/route.ts",
+    "./api/test-reports/unit/route": "./api/test-reports/unit/route.ts",
+    "./lib/planning-workflow.mjs": {
+      "types": "./lib/planning-workflow.mjs.d.ts",
+      "default": "./lib/planning-workflow.mjs"
+    },
+    "./lib/planning-parse-core.mjs": {
+      "types": "./lib/planning-parse-core.mjs.d.ts",
+      "default": "./lib/planning-parse-core.mjs"
+    }
   },
   "peerDependencies": {
+    "@base-ui/react": ">=1",
     "next": ">=14",
     "react": ">=18",
     "react-dom": ">=18",

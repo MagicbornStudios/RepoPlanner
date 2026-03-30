@@ -1,8 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn } from "@/lib/utils";
+import { cn } from "../../lib/utils";
+import { ScrollArea } from "./scroll-area";
 
 type PanelSectionProps = {
   title?: string;

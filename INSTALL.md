@@ -1,205 +1,243 @@
-# RepoPlanner: Install & setup
+# RepoPlanner: Install and setup
 
-Use this guide to add RepoPlanner to a Next.js app and get the planning cockpit running.
-
-## IDE / typecheck in this submodule only
-
-This folder is a **fully contained submodule**: it has its own `tsconfig.json` and minimal stub files under `lib/` and `components/ui/` so that when you open it in an editor, the IDE resolves `@/` and dependencies without needing the host app. Optional: from this directory run `pnpm install --ignore-workspace` to install devDependencies (react, recharts, etc.). Then the editor and `pnpm exec tsc --noEmit` use the local config. At runtime the host still supplies real UI and deps; the stubs are for typecheck/IDE only.
+Use this guide to add RepoPlanner to a Next.js app and get the planning cockpit running against a host repository.
 
 ## Prerequisites
 
-- **Node 18+**
-- **Next.js 14+** (App Router)
-- **Tailwind CSS** and **shadcn/ui** (or equivalent: Card, Tabs, Button, Input, ScrollArea, Badge, Chart primitives). The UI relies on semantic tokens: `--foreground`, `--muted-foreground`, `--card`, `--border`, `--primary`, etc.
+- Node 22+
+- Next.js 14+ or newer
+- Tailwind CSS or equivalent utility pipeline
+- A host repository with a planning root (`.planning/` by default)
 
-## 1. Add the submodule
+## 1. Add RepoPlanner to the host
 
-From your **repo root** (not inside the Next app directory):
+RepoPlanner can be consumed from a vendored checkout or as a published package. The publish surface is the same source-first package contract used in this repo.
+
+### Vendored / local package
 
 ```bash
 git submodule add https://github.com/MagicbornStudios/RepoPlanner.git vendor/repo-planner
 git submodule update --init --recursive
+pnpm add repo-planner@file:../../vendor/repo-planner
 ```
 
-If the repo already has the submodule (e.g. after clone):
+Adjust the relative `file:` path for your app package.
+
+### CLI-only use from the host root
+
+You can also call the vendored CLI directly:
 
 ```bash
-git submodule update --init --recursive
+node vendor/repo-planner/scripts/loop-cli.mjs --help
 ```
 
-### Bootstrap `.planning/` (greenfield)
-
-From the **host repo root** (where `.planning` should live):
+The package now exposes the same entrypoint through the `repo-planner` bin, so hosts that install it as a dependency can run:
 
 ```bash
-node vendor/repo-planner/scripts/loop-cli.mjs init
+pnpm exec repo-planner --help
 ```
 
-This copies XML/MD templates into `.planning/templates/`, writes `STATE.xml`, `TASK-REGISTRY.xml`, `ROADMAP.xml`, `DECISIONS.xml`, `ERRORS-AND-ATTEMPTS.xml`, `REQUIREMENTS.xml`, `planning-config.toml`, `reports/.gitkeep`, phase folder `phases/01-greenfield/` with `01-01-PLAN.xml` and `01-01-SUMMARY.xml`, and creates **`AGENTS.md`** at the repo root unless it already exists. Use **`--force`** to overwrite those bootstrap files; **`--no-agents-md`** to skip `AGENTS.md`.
+### Publish / tarball verification
 
-Then run `planning setup checklist` to verify git + planning files.
+From the package root:
 
-## 2. Path alias (Next.js app)
-
-So you can `import { PlanningCockpit } from "@/vendor/repo-planner"`, add a path in your Next app’s `tsconfig.json`. If the app lives in e.g. `docs-site/`:
-
-```json
-{
-  "compilerOptions": {
-    "baseUrl": ".",
-    "paths": {
-      "@/vendor/repo-planner": ["../vendor/repo-planner"],
-      "@/*": ["./*"]
-    }
-  }
-}
+```bash
+pnpm pack --dry-run
 ```
 
-Adjust the path if your app is at repo root (e.g. `["vendor/repo-planner"]`).
+That dry-run should include the runtime source files, package subpath entrypoints, CLI scripts, and `.planning/` bootstrap assets. It should not rely on `vendor/`-only import paths from the consuming app.
 
-## 3. Planning CSS tokens (required for status/diff colors)
+## 2. Bootstrap the host planning tree
 
-RepoPlanner uses **theme tokens** so the host controls colors. In your **global CSS** (e.g. `app/global.css` or `app/(fumadocs)/global.css`), define:
+From the host repo root:
+
+```bash
+node vendor/repo-planner/scripts/loop-cli.mjs init --minimal --no-agents-md
+```
+
+Minimal init creates:
+
+- `.planning/AGENTS.md`
+- `STATE.xml`
+- `TASK-REGISTRY.xml`
+- `ROADMAP.xml`
+- `DECISIONS.xml`
+- `ERRORS-AND-ATTEMPTS.xml`
+- `REQUIREMENTS.xml`
+- `planning-config.toml`
+
+Minimal init does **not** create:
+
+- `.planning/IMPLEMENTATION_PLAN.md`
+- `.planning/reports/`
+- `.planning/templates/`
+- `.planning/phases/`
+
+Use full init only when you actually need the template and phase scaffolding.
+
+## 3. Configure Next.js
+
+Add the package to `transpilePackages` in your host's `next.config.*`:
+
+```ts
+const nextConfig = {
+  transpilePackages: ["repo-planner"],
+};
+
+export default nextConfig;
+```
+
+If your app keeps a repo-root planning tree outside the app directory, also set `REPOPLANNER_PROJECT_ROOT` in the host runtime env or Next config so API routes and child CLI calls resolve the intended repo.
+
+## 4. Tailwind / content scanning
+
+Make sure your host's Tailwind content paths include RepoPlanner source when the package is vendored or linked outside the app root.
+
+Typical monorepo example:
+
+```ts
+content: [
+  "./app/**/*.{ts,tsx,mdx}",
+  "./components/**/*.{ts,tsx}",
+  "../../vendor/repo-planner/**/*.{ts,tsx,js,mjs}",
+]
+```
+
+If you consume a published package instead of vendored source, use the installed package path that matches your toolchain.
+
+## 5. Package imports and subpaths
+
+Import RepoPlanner by package name, not by app-local aliases.
+
+Primary subpaths:
+
+| Import | Purpose |
+| --- | --- |
+| `repo-planner` | core cockpit surface, planning edit review, data-source types |
+| `repo-planner/host` | workspace shell, dashboard, host policy helpers |
+| `repo-planner/planning-pack` | planning-pack gallery and embed-pack helpers |
+| `repo-planner/planning.css` | package stylesheet |
+| `repo-planner/cockpit-host-context` | neutral host context payload helpers |
+
+The package already exposes its own `cn` helper and package-local UI primitives. Hosts do **not** need an `@/lib/utils` alias for RepoPlanner internals, and they should not import from `vendor/repo-planner/*` from app code once the package dependency is installed.
+
+## 6. Global CSS
+
+Import RepoPlanner's package stylesheet once in your host app:
+
+```ts
+import "repo-planner/planning.css";
+```
+
+You can override the planning status tokens in your own theme:
 
 ```css
 :root {
-  /* HSL values only (no "hsl()") – used for status badges and diff colors */
   --planning-status-done: 142 76% 36%;
   --planning-status-progress: 38 92% 50%;
   --planning-status-failed: 0 72% 51%;
   --planning-diff-add: 142 76% 36%;
   --planning-diff-remove: 0 72% 51%;
 }
-
-@theme inline {
-  /* If you use Tailwind v4 @theme, expose them for Tailwind */
-  --color-planning-status-done: hsl(var(--planning-status-done));
-  --color-planning-status-progress: hsl(var(--planning-status-progress));
-  --color-planning-status-failed: hsl(var(--planning-status-failed));
-  --color-planning-diff-add: hsl(var(--planning-diff-add));
-  --color-planning-diff-remove: hsl(var(--planning-diff-remove));
-}
-
-/* Optional: classes used by planning-status.ts for badges */
-.planning-status-done {
-  border-color: color-mix(in oklch, var(--color-planning-status-done), transparent 40%);
-  background-color: color-mix(in oklch, var(--color-planning-status-done), transparent 85%);
-  color: var(--color-planning-status-done);
-}
-.planning-status-progress {
-  border-color: color-mix(in oklch, var(--color-planning-status-progress), transparent 40%);
-  background-color: color-mix(in oklch, var(--color-planning-status-progress), transparent 85%);
-  color: var(--color-planning-status-progress);
-}
-.planning-status-failed {
-  border-color: color-mix(in oklch, var(--color-planning-status-failed), transparent 40%);
-  background-color: color-mix(in oklch, var(--color-planning-status-failed), transparent 85%);
-  color: var(--color-planning-status-failed);
-}
-.planning-diff-add {
-  background-color: color-mix(in oklch, var(--color-planning-diff-add), transparent 85%);
-  color: color-mix(in oklch, var(--color-planning-diff-add), white 20%);
-}
-.planning-diff-remove {
-  background-color: color-mix(in oklch, var(--color-planning-diff-remove), transparent 85%);
-  color: color-mix(in oklch, var(--color-planning-diff-remove), white 20%);
-}
 ```
 
-If you don’t add the `.planning-status-*` / `.planning-diff-*` classes, status badges still get colors from your Badge component; the tokens are used when those classes are applied.
+## 7. Host utility expectations
 
-## 4. Planning CLI script (optional but recommended)
+RepoPlanner ships package-local primitives and utility helpers, but it still assumes the host provides a standard React + Tailwind app shell:
 
-From **repo root**, you want to run the submodule CLI so it reads your repo’s `.planning/`:
+- React and React DOM
+- Next.js app/runtime when using the package inside Next
+- Tailwind utility classes or an equivalent compiled class pipeline
+- your own app-level `cn` helper only for your host code, not for RepoPlanner internals
 
-```json
-{
-  "scripts": {
-    "planning": "node vendor/repo-planner/scripts/loop-cli.mjs"
-  }
-}
-```
+No `@/vendor/repo-planner` alias should be required in host code.
 
-Then: `pnpm planning snapshot`, `pnpm planning new-agent-id`, etc.
+## 8. Mount the cockpit
 
-## 5. Add a planning page
-
-Create a page that renders the cockpit (e.g. `app/planning/page.tsx` or under your app layout):
+Use the exported host shell instead of app-local aliases:
 
 ```tsx
 "use client";
 
-import { PlanningCockpit } from "@/vendor/repo-planner";
+import { PlanningCockpitDashboard } from "repo-planner/host";
 
 export default function PlanningPage() {
-  return (
-    <div className="flex flex-col gap-4">
-      <PlanningCockpit />
-    </div>
-  );
+  return <PlanningCockpitDashboard />;
 }
 ```
 
-## 6. Install API routes from the package (recommended)
+## 9. Provide host APIs
 
-The package owns planning API handlers. Install thin re-export routes into your Next.js app so you don’t maintain route code:
+The cockpit expects host routes for state, metrics, and latest report data. In this portfolio repo those live under `app/api/planning-*`.
 
-```bash
-# From repo root; app dir default is docs-site
-node vendor/repo-planner/scripts/install-routes.mjs [--app-dir=docs-site] [--dry-run]
-```
-
-This writes (or overwrites) files under `app-dir/app/api/` that re-export GET/POST from the package. Re-run after updating the submodule. See `--help` for options.
-
-## 7. API routes (cockpit needs them)
-
-The cockpit fetches state, reports, metrics, and can run the CLI. Your app must expose API routes that the UI calls. Either install them from the package (above) or implement your own. Typical routes:
+At minimum, hosts should provide:
 
 | Route | Purpose |
-|-------|--------|
-| `GET /api/planning-state` | Agent-loop bundle (state, tasks, questions). Run CLI `simulate loop --json` from **repo root**. |
-| `GET /api/planning-reports/latest` | Latest report markdown. |
-| `GET /api/planning-metrics` | Metrics + usage (if you use `planning report generate`). |
-| `POST /api/planning-cli/run` | Run arbitrary CLI commands (e.g. `snapshot`, `report generate`). |
-| `POST /api/ai/planning-chat` | AI planning chat (if you use it). |
+| --- | --- |
+| `GET /api/planning-state` | normalized planning bundle |
+| `GET /api/planning-metrics` | metrics payload |
+| `GET /api/planning-reports/latest` | latest report markdown or summary |
 
-For **test reports**: run `pnpm test:unit` from the Next app dir (e.g. `docs-site`) so that `test-reports/unit/results.json` is written (vitest config with `reporters: ['json']`, `outputFile.json`). The Tests tab in the cockpit fetches `GET /api/test-reports/unit` to display pass/fail and per-suite details.
+Optional write routes should stay explicit and gated by host policy.
 
-In each planning route, run the CLI from **repo root** with:
+### Route installer
 
-- **CLI path**: `path.join(process.cwd(), "vendor", "repo-planner", "scripts", "loop-cli.mjs")` (if the Next app runs from repo root), or `path.join(process.cwd(), "..", "vendor", "repo-planner", "scripts", "loop-cli.mjs")` if the app lives in a subdir (e.g. `docs-site/`).
-- **cwd**: your repo root (where `.planning/` lives).
-
-See your host repo’s existing `app/api/planning-*` and `app/api/ai/planning-chat` for examples.
-
-## 7. `.planning/` in the host
-
-RepoPlanner does **not** ship your STATE, ROADMAP, or TASK-REGISTRY. Keep `.planning/` in the host repo (STATE.xml, ROADMAP.xml, TASK-REGISTRY.xml, phases, templates, etc.). The submodule’s `.planning/templates/` are a reference; you can copy or symlink, or keep your own. The CLI and UI always use the host’s `.planning/` when run from the host.
-
-## 9. Dependencies
-
-The UI uses:
-
-- `react`, `react-dom`
-- `lucide-react`
-- `recharts`
-- `react-markdown`
-- `@assistant-ui/react`, `@assistant-ui/react-ui` (for chat tab)
-- `motion` (framer-motion)
-- shadcn primitives: Card, Tabs, Button, Input, ScrollArea, Badge, Chart components
-
-Install these in the **host** app; the submodule has no `package.json` and relies on the host’s `node_modules`.
-
-## Styling gotchas
-
-- **No Tailwind**: The UI uses Tailwind class names (`flex`, `gap-4`, `text-foreground`, etc.). The **variable values** have fallbacks from planning.css, but the **classes** must exist (Tailwind or equivalent). Use a Tailwind + shadcn (or compatible) build for best results.
-- **Dark mode**: Fallbacks in planning.css are dark-theme friendly. If you use `.dark` or data-theme, you can override variables under `.dark .repo-planner` (or similar) to match.
-
-## Versioning
-
-Pin the submodule commit in the host so upgrades are intentional:
+RepoPlanner ships an installer for host routes:
 
 ```bash
-cd vendor/repo-planner && git fetch && git checkout v1.0.0 && cd ../..
-git add vendor/repo-planner && git commit -m "chore: pin RepoPlanner to v1.0.0"
+node vendor/repo-planner/scripts/install-routes.mjs --app-dir=apps/portfolio --dry-run
+```
+
+The installer now:
+
+- targets package imports such as `repo-planner/api/planning-state/route`
+- understands monorepo app roots like `apps/portfolio`
+- installs GET routes by default
+- requires explicit opt-in for command or write routes
+
+```bash
+node vendor/repo-planner/scripts/install-routes.mjs \
+  --app-dir=apps/portfolio \
+  --include-cli-run \
+  --include-edits-apply
+```
+
+That keeps embeds read-only by default and makes host mutability a deliberate choice.
+
+## 10. Preview uploads
+
+RepoPlanner's Pack mode now supports two upload paths:
+
+- `Import`: local editable planning files persisted in browser storage
+- `Preview upload`: read-only ephemeral pack JSON or `.planning` zip inspection with no write path and no local persistence
+
+Preview uploads are intended for quick inspection, not editing. Built-in packs and preview uploads should both stay read-only in the UI.
+
+## 11. Host planning data
+
+RepoPlanner does not ship your live planning files. Keep them in the host repository and point the CLI / APIs at that root with `REPOPLANNER_PROJECT_ROOT` if needed.
+
+Minimal host expectations:
+
+- `.planning/*.xml` for the machine loop
+- documentation or section planning files in the host's preferred human format
+- `planning-config.toml` as the source of truth for planning roots
+
+## 12. Versioning
+
+Pin the submodule or package version intentionally and upgrade on purpose.
+
+RepoPlanner uses a simple semver policy:
+
+- patch: packaging fixes, docs fixes, non-breaking bug fixes
+- minor: additive exports, additive CLI commands, new cockpit surfaces
+- major: breaking command syntax, export-path changes, or host-contract changes
+
+```bash
+cd vendor/repo-planner
+git fetch
+git checkout <ref>
+cd ../..
+git add vendor/repo-planner
+git commit -m "chore: update RepoPlanner"
 ```

@@ -1,13 +1,11 @@
-import { cn } from "./_adapter";
-import type {
-  ProgressStep,
-  ProgressTrackerChoice,
-  ProgressTrackerProps,
-} from "./schema";
-import { Check, X, Loader2, Timer, AlertCircle } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+// @ts-nocheck
+"use client";
 
-function formatElapsedTime(milliseconds: number): string {
+import * as React from "react";
+import { cn } from "./_adapter";
+import { Check, X, Loader2, Timer, AlertCircle } from "lucide-react";
+
+function formatElapsedTime(milliseconds) {
   const roundedSeconds = Math.round(Math.max(0, milliseconds) / 100) / 10;
 
   if (roundedSeconds < 60) {
@@ -20,7 +18,7 @@ function formatElapsedTime(milliseconds: number): string {
   return `${minutes}m ${remainingSeconds}s`;
 }
 
-function formatElapsedTimeDateTime(milliseconds: number): string {
+function formatElapsedTimeDateTime(milliseconds) {
   const roundedSeconds = Math.round(Math.max(0, milliseconds) / 100) / 10;
 
   if (roundedSeconds < 60) {
@@ -43,7 +41,7 @@ function formatElapsedTimeDateTime(milliseconds: number): string {
   return `PT${hourPart}${minutePart}${secondPart}`;
 }
 
-function getCurrentStepId(steps: ProgressStep[]): string | null {
+function getCurrentStepId(steps) {
   const inProgressStep = steps.find((s) => s.status === "in-progress");
   if (inProgressStep) return inProgressStep.id;
 
@@ -56,10 +54,7 @@ function getCurrentStepId(steps: ProgressStep[]): string | null {
   return null;
 }
 
-function getReceiptState(outcome: ProgressTrackerChoice["outcome"]): {
-  toneClassName: string;
-  icon: LucideIcon;
-} {
+function getReceiptState(outcome) {
   switch (outcome) {
     case "success":
       return {
@@ -84,11 +79,7 @@ function getReceiptState(outcome: ProgressTrackerChoice["outcome"]): {
   }
 }
 
-interface StepIndicatorProps {
-  status: "pending" | "in-progress" | "completed" | "failed";
-}
-
-function StepIndicator({ status }: StepIndicatorProps) {
+function StepIndicator({ status }) {
   if (status === "pending") {
     return (
       <span
@@ -140,7 +131,7 @@ function StepIndicator({ status }: StepIndicatorProps) {
   return null;
 }
 
-function ElapsedTimeBadge({ elapsedTime }: { elapsedTime?: number }) {
+function ElapsedTimeBadge({ elapsedTime }) {
   if (elapsedTime === undefined || elapsedTime <= 0) {
     return null;
   }
@@ -155,20 +146,8 @@ function ElapsedTimeBadge({ elapsedTime }: { elapsedTime?: number }) {
   );
 }
 
-interface ProgressTrackerBaseProps {
-  id: ProgressTrackerProps["id"];
-  steps: ProgressTrackerProps["steps"];
-  elapsedTime?: ProgressTrackerProps["elapsedTime"];
-  className?: ProgressTrackerProps["className"];
-}
-
-function ProgressTrackerReceipt({
-  id,
-  steps,
-  elapsedTime,
-  className,
-  choice,
-}: ProgressTrackerBaseProps & { choice: ProgressTrackerChoice }) {
+function ProgressTrackerReceipt(props) {
+  const { id, steps, elapsedTime, className, choice } = props;
   const receiptState = getReceiptState(choice.outcome);
   const ReceiptIcon = receiptState.icon;
 
@@ -236,12 +215,8 @@ function ProgressTrackerReceipt({
   );
 }
 
-function ProgressTrackerLive({
-  id,
-  steps,
-  elapsedTime,
-  className,
-}: ProgressTrackerBaseProps) {
+function ProgressTrackerLive(props) {
+  const { id, steps, elapsedTime, className } = props;
   const hasInProgress = steps.some((step) => step.status === "in-progress");
   const currentStepId = getCurrentStepId(steps);
 
@@ -339,13 +314,8 @@ function ProgressTrackerLive({
   );
 }
 
-function ProgressTrackerRoot({
-  id,
-  steps,
-  elapsedTime,
-  className,
-  choice,
-}: ProgressTrackerProps) {
+function ProgressTrackerRoot(props) {
+  const { id, steps, elapsedTime, className, choice } = props;
   const viewKey = choice ? `receipt-${choice.outcome}` : "interactive";
 
   return (
@@ -370,12 +340,7 @@ function ProgressTrackerRoot({
   );
 }
 
-type ProgressTrackerComponent = typeof ProgressTrackerRoot & {
-  Live: typeof ProgressTrackerLive;
-  Receipt: typeof ProgressTrackerReceipt;
-};
-
 export const ProgressTracker = Object.assign(ProgressTrackerRoot, {
   Live: ProgressTrackerLive,
   Receipt: ProgressTrackerReceipt,
-}) as ProgressTrackerComponent;
+});

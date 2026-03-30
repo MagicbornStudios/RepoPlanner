@@ -1,80 +1,115 @@
 #!/usr/bin/env node
 /**
- * Install RepoPlanner API routes into a Next.js app so the host doesn't own planning logic.
- * Run from repo root: node vendor/repo-planner/scripts/install-routes.mjs [--app-dir=docs-site] [--dry-run]
+ * Install RepoPlanner API routes into a Next.js app so the host can opt into the
+ * package routes without owning route bodies locally.
  *
- * Writes thin re-export route files under app-dir/app/api/ that delegate to the package.
- * Uses relative path from each route file to vendor/repo-planner/api/.
+ * Default output is read-only embed safe: GET routes only. Command/apply POST
+ * routes must be opted into explicitly.
  */
 import fs from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PACKAGE_ROOT = path.resolve(__dirname, "..");
-const API_DIR = path.join(PACKAGE_ROOT, "api");
-
-/** Routes the package provides: path segment under app/api/ -> path under package api/ */
 const ROUTES = [
-  ["test-reports/unit", "test-reports/unit", ["GET"]],
-  ["planning-state", "planning-state", ["GET"]],
-  ["planning-cli/run", "planning-cli/run", ["POST"]],
-  ["planning-reports/latest", "planning-reports/latest", ["GET"]],
-  ["planning-metrics", "planning-metrics", ["GET"]],
-  ["planning-edits/apply", "planning-edits/apply", ["POST"]],
+  ["test-reports/unit", "api/test-reports/unit/route", ["GET"], "read"],
+  ["planning-state", "api/planning-state/route", ["GET"], "read"],
+  ["planning-reports/latest", "api/planning-reports/latest/route", ["GET"], "read"],
+  ["planning-metrics", "api/planning-metrics/route", ["GET"], "read"],
+  ["planning-roadmap", "api/planning-roadmap/route", ["GET"], "read"],
+  ["planning-cli/run", "api/planning-cli/run/route", ["POST"], "command"],
+  ["planning-edits/apply", "api/planning-edits/apply/route", ["POST"], "write"],
 ];
 
-function parseArgs() {
-  const args = process.argv.slice(2);
-  let appDir = "docs-site";
-  let dryRun = false;
-  for (const a of args) {
-    if (a === "--dry-run") dryRun = true;
-    else if (a.startsWith("--app-dir=")) appDir = a.slice("--app-dir=".length);
-    else if (a === "--help" || a === "-h") {
-      console.log(`
-install-routes.mjs [--app-dir=docs-site] [--dry-run]
+function printHelp() {
+  console.log(`
+install-routes.mjs [--app-dir=<path>] [--dry-run] [--include-cli-run] [--include-edits-apply]
 
-  Installs RepoPlanner API routes into the Next.js app at --app-dir.
-  Each installed file re-exports GET/POST from the package so the host does not own planning logic.
+  Installs thin Next.js route files under <app-dir>/app/api that re-export from
+  the published package paths (for example "repo-planner/api/planning-state/route").
 
-  --app-dir   Next.js app directory (default: docs-site)
-  --dry-run   Print what would be written, do not write
+  Defaults:
+    - auto-detects a Next app root; prefers apps/portfolio when present
+    - installs GET routes only
+
+  Flags:
+    --app-dir=<path>              Repo-relative Next app root (for example apps/portfolio)
+    --dry-run                     Print files instead of writing them
+    --include-cli-run             Also install POST /planning-cli/run
+    --include-edits-apply         Also install POST /planning-edits/apply
 `);
+}
+
+async function pathExists(target) {
+  try {
+    await fs.access(target);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveDefaultAppDir() {
+  const candidates = ["apps/portfolio", "docs-site", "."];
+  for (const candidate of candidates) {
+    if (await pathExists(path.join(process.cwd(), candidate, "app"))) return candidate;
+  }
+  return ".";
+}
+
+async function parseArgs() {
+  const args = process.argv.slice(2);
+  let appDir = null;
+  let dryRun = false;
+  let includeCliRun = false;
+  let includeEditsApply = false;
+  for (const arg of args) {
+    if (arg === "--dry-run") dryRun = true;
+    else if (arg === "--include-cli-run") includeCliRun = true;
+    else if (arg === "--include-edits-apply") includeEditsApply = true;
+    else if (arg.startsWith("--app-dir=")) appDir = arg.slice("--app-dir=".length);
+    else if (arg === "--help" || arg === "-h") {
+      printHelp();
       process.exit(0);
     }
   }
-  return { appDir, dryRun };
+  return {
+    appDir: appDir ?? (await resolveDefaultAppDir()),
+    dryRun,
+    includeCliRun,
+    includeEditsApply,
+  };
 }
 
-function relativeFromTo(fromDir, toDir) {
-  const from = path.resolve(fromDir);
-  const to = path.resolve(toDir);
-  const rel = path.relative(from, to);
-  return rel.replace(/\\/g, "/");
+function shouldInstallRoute(kind, options) {
+  if (kind === "read") return true;
+  if (kind === "command") return options.includeCliRun;
+  if (kind === "write") return options.includeEditsApply;
+  return false;
+}
+
+function buildRouteFileContent(packagePath, exportsList) {
+  return `/** Generated by RepoPlanner install-routes. Do not edit; re-run to update. */\n\nexport { ${exportsList.join(", ")} } from "repo-planner/${packagePath}";\n`;
 }
 
 async function main() {
-  const { appDir, dryRun } = parseArgs();
-  const appRoot = path.resolve(process.cwd(), appDir);
+  const options = await parseArgs();
+  const appRoot = path.resolve(process.cwd(), options.appDir);
   const appApi = path.join(appRoot, "app", "api");
 
-  const packageApiRel = relativeFromTo(appApi, path.join(PACKAGE_ROOT, "api"));
-  const prefix = packageApiRel.startsWith("..") ? packageApiRel : `./${packageApiRel}`;
+  if (!(await pathExists(path.join(appRoot, "app")))) {
+    throw new Error(`Could not find a Next app at ${options.appDir}`);
+  }
 
-  for (const [routePath, packagePath, exports] of ROUTES) {
+  for (const [routePath, packagePath, exportsList, kind] of ROUTES) {
+    if (!shouldInstallRoute(kind, options)) continue;
     const routeDir = path.join(appApi, routePath);
     const routeFile = path.join(routeDir, "route.ts");
-    const segments = routePath.split("/").length;
-    const back = "../".repeat(segments + 3);
-    const importPath = `${back}${path.join("vendor", "repo-planner", "api", packagePath).replace(/\\/g, "/")}/route`;
-    const exportList = exports.join(", ");
-    const content = `/** Generated by RepoPlanner install-routes. Do not edit; re-run to update. */\n\nexport { ${exportList} } from "${importPath}";\n`;
+    const content = buildRouteFileContent(packagePath, exportsList);
 
-    if (dryRun) {
+    if (options.dryRun) {
       console.log(`[dry-run] ${routeFile}\n${content}`);
       continue;
     }
+
     await fs.mkdir(routeDir, { recursive: true });
     await fs.writeFile(routeFile, content, "utf-8");
     console.log(`Wrote ${routeFile}`);

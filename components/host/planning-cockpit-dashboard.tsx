@@ -2,55 +2,66 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import ReactMarkdown from "react-markdown";
-import { BookOpen, FolderOpen, HardDrive, LayoutDashboard, Plus, Trash2, Download } from "lucide-react";
-import { Button } from "../ui/button";
+import {
+  Download,
+  FolderUp,
+  HardDrive,
+  LayoutDashboard,
+  Layers,
+  LineChart,
+} from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
-import type { BookPlanningContext } from "../../lib/book-planning-context";
+import { Button } from "../ui/button";
+import { PlanningCockpit } from "../organisms/planning-cockpit";
+import type { CockpitHostContext } from "../../lib/cockpit-host-context";
+import type { PlanningCockpitBundle } from "../../lib/planning-cockpit-data-source";
+import type { PlanningHostPolicy } from "../../lib/planning-host-policy";
+import { resolvePlanningHostPolicy } from "../../lib/planning-host-policy";
+import { createPlanningPackDataSource } from "../../lib/planning-pack-cockpit";
+import { computePackKpis } from "../../lib/planning-pack-kpis";
 import {
   defaultWorkspaceState,
   loadWorkspaceState,
   readFilesAsPack,
+  readPreviewUploadAsPack,
   saveWorkspaceState,
   type PlanningPack,
   type WorkspaceProject,
   type WorkspaceStateV1,
 } from "../../lib/workspace-storage";
+import { PlanningFileInspector } from "./planning-file-inspector";
+import { PlanningPackOverview } from "./planning-pack-overview";
+import { PlanningWorkspaceSidebar } from "./planning-workspace-sidebar";
 
 export type PlanningCockpitDashboardProps = {
-  /** Live monorepo pane (APIs, placeholder, or full PlanningCockpit). */
   livePane: React.ReactNode;
-  /** When set (e.g. opened from reader), show book strip + optional reader tab. */
-  bookContext?: BookPlanningContext;
-  /**
-   * Build reader iframe URL when bookContext.embedReader is true.
-   * Defaults to `/apps/reader?book=<slug>` — override for custom reader base paths.
-   */
-  readerAppHref?: (opts: { book: string }) => string;
-  /**
-   * Preloaded packs (e.g. from `/planning-embed/builtin-packs.json`).
-   * Not duplicated into `localStorage` packs; selection uses `surfaceBuiltinPackId`.
-   */
+  hostContext?: CockpitHostContext;
   builtinPacks?: PlanningPack[];
+  preferBuiltinPackId?: string;
+  hostPolicy?: Partial<PlanningHostPolicy>;
 };
-
-function defaultReaderAppHref(opts: { book: string }): string {
-  const p = new URLSearchParams();
-  p.set("book", opts.book);
-  return `/apps/reader?${p.toString()}`;
-}
 
 export function PlanningCockpitDashboard({
   livePane,
-  bookContext,
-  readerAppHref = defaultReaderAppHref,
+  hostContext,
   builtinPacks = [],
+  preferBuiltinPackId,
+  hostPolicy,
 }: PlanningCockpitDashboardProps) {
   const [state, setState] = useState<WorkspaceStateV1>(defaultWorkspaceState);
+  const [previewPack, setPreviewPack] = useState<PlanningPack | null>(null);
+  const [previewSelected, setPreviewSelected] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [mainTab, setMainTab] = useState<"workspace" | "reader">("workspace");
+  const [workspaceTab, setWorkspaceTab] = useState<"cockpit" | "inspector" | "overview">("cockpit");
+  const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
+  const [modeOverride, setModeOverride] = useState<"live" | "pack" | null>(null);
+  const [isDraggingFiles, setIsDraggingFiles] = useState(false);
+  const [packBundle, setPackBundle] = useState<PlanningCockpitBundle | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const previewInputRef = useRef<HTMLInputElement>(null);
+  const appliedPreferBuiltin = useRef(false);
+  const policy = useMemo(() => resolvePlanningHostPolicy(hostPolicy), [hostPolicy]);
 
   useEffect(() => {
     setState(loadWorkspaceState());
@@ -59,250 +70,278 @@ export function PlanningCockpitDashboard({
 
   const persist = useCallback((next: WorkspaceStateV1) => {
     setState(next);
-    const r = saveWorkspaceState(next);
-    if (!r.ok) setSaveError(r.error);
+    const result = saveWorkspaceState(next);
+    if (!result.ok) setSaveError(result.error);
     else setSaveError(null);
   }, []);
 
+  useEffect(() => {
+    if (!hydrated || !preferBuiltinPackId || appliedPreferBuiltin.current) return;
+    if (!builtinPacks.some((pack) => pack.id === preferBuiltinPackId)) return;
+    appliedPreferBuiltin.current = true;
+    const pack = builtinPacks.find((entry) => entry.id === preferBuiltinPackId);
+    const firstPath = pack?.files?.[0]?.path ?? null;
+    setModeOverride("pack");
+    setPreviewSelected(false);
+    setState((prev) => {
+      const next = {
+        ...prev,
+        activeProjectId: prev.projects.find((project) => project.kind === "live")?.id ?? "live",
+        surfaceBuiltinPackId: preferBuiltinPackId,
+      };
+      const result = saveWorkspaceState(next);
+      if (!result.ok) setSaveError(result.error);
+      else setSaveError(null);
+      return next;
+    });
+    setSelectedFilePath(firstPath);
+    setWorkspaceTab("inspector");
+  }, [builtinPacks, hydrated, preferBuiltinPackId]);
+
   const liveProject = useMemo((): Extract<WorkspaceProject, { kind: "live" }> => {
-    const lp = state.projects.find((p): p is Extract<WorkspaceProject, { kind: "live" }> => p.kind === "live");
-    return lp ?? { id: "live", kind: "live", label: "This repository" };
+    const live = state.projects.find(
+      (project): project is Extract<WorkspaceProject, { kind: "live" }> => project.kind === "live",
+    );
+    return live ?? { id: "live", kind: "live", label: "This repository" };
   }, [state.projects]);
 
   const surfaceBuiltinId = state.surfaceBuiltinPackId ?? null;
-  const userActive = state.projects.find((p) => p.id === state.activeProjectId);
+  const userActive = state.projects.find((project) => project.id === state.activeProjectId);
   const userPackProjects = useMemo(
-    () => state.projects.filter((p): p is Extract<WorkspaceProject, { kind: "pack" }> => p.kind === "pack"),
+    () =>
+      state.projects.filter(
+        (project): project is Extract<WorkspaceProject, { kind: "pack" }> => project.kind === "pack",
+      ),
     [state.projects],
   );
 
-  const activePackForMarkdown = useMemo((): PlanningPack | undefined => {
-    if (surfaceBuiltinId) {
-      return builtinPacks.find((bp) => bp.id === surfaceBuiltinId);
-    }
-    if (userActive?.kind === "pack") {
-      return state.packs[userActive.packId];
-    }
+  const activePack = useMemo((): PlanningPack | undefined => {
+    if (previewSelected && previewPack) return previewPack;
+    if (surfaceBuiltinId) return builtinPacks.find((pack) => pack.id === surfaceBuiltinId);
+    if (userActive?.kind === "pack") return state.packs[userActive.packId];
     return undefined;
-  }, [surfaceBuiltinId, builtinPacks, userActive, state.packs]);
+  }, [builtinPacks, previewPack, previewSelected, state.packs, surfaceBuiltinId, userActive]);
 
-  const showLivePane = hydrated && state.activeProjectId === liveProject.id && !surfaceBuiltinId;
+  const derivedMode =
+    hydrated && state.activeProjectId === liveProject.id && !surfaceBuiltinId && !previewSelected ? "live" : "pack";
+  const activeMode = modeOverride ?? derivedMode;
+  const showLivePane = hydrated && activeMode === "live";
+  const packReadOnly = Boolean(surfaceBuiltinId) || previewSelected || activeMode === "live";
 
-  const selectLive = () => {
+  const kpis = useMemo(() => {
+    if (!activePack?.files?.length) return null;
+    return computePackKpis(activePack.files);
+  }, [activePack]);
+
+  const packDataSource = useMemo(() => {
+    if (!activePack) return null;
+    return createPlanningPackDataSource(activePack, {
+      badgeLabel: previewSelected ? "Preview pack" : surfaceBuiltinId ? "Built-in pack" : "Local pack",
+    });
+  }, [activePack, previewSelected, surfaceBuiltinId]);
+
+  const selectedFile = useMemo(() => {
+    if (!activePack?.files || !selectedFilePath) return null;
+    return activePack.files.find((file) => file.path === selectedFilePath) ?? null;
+  }, [activePack, selectedFilePath]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!packDataSource || activeMode !== "pack") {
+      setPackBundle(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+    packDataSource
+      .getBundle()
+      .then((bundle) => {
+        if (!cancelled) setPackBundle(bundle);
+      })
+      .catch(() => {
+        if (!cancelled) setPackBundle(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeMode, packDataSource]);
+
+  const handleSelectFile = useCallback((path: string) => {
+    setSelectedFilePath(path);
+    setWorkspaceTab("inspector");
+  }, []);
+
+  const selectLive = useCallback(() => {
+    setSelectedFilePath(null);
+    setModeOverride("live");
+    setPreviewSelected(false);
     persist({ ...state, activeProjectId: liveProject.id, surfaceBuiltinPackId: null });
-  };
+  }, [liveProject.id, persist, state]);
 
-  const selectBuiltin = (packId: string) => {
+  const selectBuiltin = useCallback((packId: string) => {
+    const pack = builtinPacks.find((entry) => entry.id === packId);
+    setSelectedFilePath(pack?.files?.[0]?.path ?? null);
+    setModeOverride("pack");
+    setPreviewSelected(false);
     persist({ ...state, activeProjectId: liveProject.id, surfaceBuiltinPackId: packId });
-  };
+  }, [builtinPacks, liveProject.id, persist, state]);
 
-  const selectUserPackProject = (id: string) => {
-    persist({ ...state, activeProjectId: id, surfaceBuiltinPackId: null });
-  };
+  const selectUserPackProject = useCallback((projectId: string) => {
+    const project = userPackProjects.find((entry) => entry.id === projectId);
+    const pack = project ? state.packs[project.packId] : null;
+    setSelectedFilePath(pack?.files?.[0]?.path ?? null);
+    setModeOverride("pack");
+    setPreviewSelected(false);
+    persist({ ...state, activeProjectId: projectId, surfaceBuiltinPackId: null });
+  }, [persist, state, userPackProjects]);
 
-  const addPackFromFiles = async (files: FileList | null) => {
+  const selectPreviewPack = useCallback(() => {
+    if (!previewPack) return;
+    setSelectedFilePath(previewPack.files[0]?.path ?? null);
+    setModeOverride("pack");
+    setPreviewSelected(true);
+  }, [previewPack]);
+
+  const addPackFromFiles = useCallback(
+    async (files: FileList | null) => {
+      if (!files?.length) return;
+      setSaveError(null);
+      try {
+        const pack = await readFilesAsPack(files);
+        const projectId = `pack-${pack.id}`;
+        const next: WorkspaceStateV1 = {
+          ...state,
+          packs: { ...state.packs, [pack.id]: pack },
+          projects: [...state.projects, { id: projectId, kind: "pack", label: pack.name, packId: pack.id }],
+          activeProjectId: projectId,
+          surfaceBuiltinPackId: null,
+        };
+        persist(next);
+        setSelectedFilePath(pack.files[0]?.path ?? null);
+        setWorkspaceTab("cockpit");
+        setModeOverride("pack");
+        setPreviewSelected(false);
+      } catch (error) {
+        setSaveError(error instanceof Error ? error.message : String(error));
+      }
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    },
+    [persist, state],
+  );
+
+  const addPreviewPackFromUpload = useCallback(async (files: FileList | null) => {
     if (!files?.length) return;
     setSaveError(null);
     try {
-      const pack = await readFilesAsPack(files);
-      const projectId = `pack-${pack.id}`;
-      const next: WorkspaceStateV1 = {
-        ...state,
-        packs: { ...state.packs, [pack.id]: pack },
-        projects: [...state.projects, { id: projectId, kind: "pack", label: pack.name, packId: pack.id }],
-        activeProjectId: projectId,
-        surfaceBuiltinPackId: null,
-      };
-      persist(next);
-    } catch (e) {
-      setSaveError(e instanceof Error ? e.message : String(e));
+      const pack = await readPreviewUploadAsPack(files);
+      setPreviewPack(pack);
+      setPreviewSelected(true);
+      setSelectedFilePath(pack.files[0]?.path ?? null);
+      setWorkspaceTab("cockpit");
+      setModeOverride("pack");
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : String(error));
     }
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  };
+    if (previewInputRef.current) previewInputRef.current.value = "";
+  }, []);
 
-  const removeActivePackProject = () => {
-    if (surfaceBuiltinId) return;
-    const ua = userActive;
-    if (!ua || ua.kind !== "pack") return;
-    const packId = ua.packId;
-    const nextProjects = state.projects.filter((p) => p.id !== ua.id);
-    const { [packId]: _removed, ...restPacks } = state.packs;
-    persist({
-      ...state,
-      projects: nextProjects.length ? nextProjects : defaultWorkspaceState().projects,
-      packs: restPacks,
-      activeProjectId: "live",
-      surfaceBuiltinPackId: null,
-    });
-  };
-
-  const exportJson = () => {
-    const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `repo-planner-workspace-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  };
-
-  const readerSrc = bookContext?.embedReader ? readerAppHref({ book: bookContext.bookSlug }) : null;
-
-  const workspaceBody = !hydrated ? (
-    <div className="rounded-2xl border border-border bg-dark-alt/50 p-8 text-center text-text-muted">
-      Loading workspace…
-    </div>
-  ) : (
-    <div className="flex min-h-[28rem] flex-col gap-4 lg:flex-row lg:gap-0">
-      <aside className="flex w-full flex-shrink-0 flex-col border-border lg:w-64 lg:border-r lg:pr-4">
-        <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-text-muted">
-          <LayoutDashboard size={14} className="text-accent" />
-          Dashboard
-        </div>
-        <p className="mb-3 text-xs leading-relaxed text-text-muted">
-          <strong className="text-text">This repository</strong> uses live planning APIs. Built-in packs ship with the site;
-          your uploads live in{" "}
-          <code className="rounded bg-dark-alt px-1 py-0.5 text-[11px]">localStorage</code> — export JSON to back up.
-        </p>
-        <ul className="space-y-1">
-          <li>
-            <button
-              type="button"
-              onClick={selectLive}
-              className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                showLivePane ? "bg-accent/15 text-primary" : "text-text-muted hover:bg-white/5 hover:text-primary"
-              }`}
-            >
-              <HardDrive size={16} className="flex-shrink-0 opacity-70" />
-              <span className="truncate">{liveProject.label}</span>
-            </button>
-          </li>
-          {builtinPacks.map((bp) => (
-            <li key={bp.id}>
-              <button
-                type="button"
-                onClick={() => selectBuiltin(bp.id)}
-                className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                  surfaceBuiltinId === bp.id
-                    ? "bg-accent/15 text-primary"
-                    : "text-text-muted hover:bg-white/5 hover:text-primary"
-                }`}
-              >
-                <FolderOpen size={16} className="flex-shrink-0 opacity-70" />
-                <span className="truncate">{bp.name}</span>
-              </button>
-            </li>
-          ))}
-          {userPackProjects.map((p) => (
-            <li key={p.id}>
-              <button
-                type="button"
-                onClick={() => selectUserPackProject(p.id)}
-                className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                  !surfaceBuiltinId && p.id === state.activeProjectId
-                    ? "bg-accent/15 text-primary"
-                    : "text-text-muted hover:bg-white/5 hover:text-primary"
-                }`}
-              >
-                <FolderOpen size={16} className="flex-shrink-0 opacity-70" />
-                <span className="truncate">{p.label}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept=".md,.mdx,.xml,.toml,.txt,text/markdown,text/plain,application/xml"
-          className="hidden"
-          onChange={(e) => addPackFromFiles(e.target.files)}
-        />
-        <div className="mt-4 flex flex-col gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="w-full justify-start gap-2 border-border"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Plus size={16} />
-            Add pack from files
-          </Button>
-          {userActive?.kind === "pack" && !surfaceBuiltinId ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="w-full justify-start gap-2 text-rose-300 hover:text-rose-200"
-              onClick={removeActivePackProject}
-            >
-              <Trash2 size={16} />
-              Remove pack workspace
-            </Button>
-          ) : null}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="w-full justify-start gap-2"
-            onClick={exportJson}
-          >
-            <Download size={16} />
-            Export workspace JSON
-          </Button>
-        </div>
-        {saveError ? (
-          <p className="mt-3 rounded-lg border border-rose-500/40 bg-rose-950/30 p-2 text-xs text-rose-200">{saveError}</p>
-        ) : null}
-      </aside>
-
-      <div className="min-w-0 flex-1 lg:pl-4">
-        {showLivePane ? (
-          <div className="min-h-[24rem] overflow-hidden rounded-2xl border border-border bg-dark-alt/40">{livePane}</div>
-        ) : null}
-        {activePackForMarkdown ? (
-          <div className="space-y-4 rounded-2xl border border-border bg-dark-alt/40 p-4">
-            <header>
-              <h2 className="text-lg font-semibold text-primary">{activePackForMarkdown.name}</h2>
-              <p className="mt-1 text-xs text-text-muted">
-                {Array.isArray(activePackForMarkdown.files) ? activePackForMarkdown.files.length : 0} file(s) · read-only
-                in browser · not written to the server
-                {surfaceBuiltinId ? " · built-in pack" : ""}
-              </p>
-            </header>
-            <div className="max-h-[65vh] space-y-6 overflow-y-auto pr-1">
-              {(Array.isArray(activePackForMarkdown.files) ? activePackForMarkdown.files : []).map((f, index) => (
-                <article
-                  key={`${f.path}-${index}`}
-                  className="border-b border-border/60 pb-6 last:border-0"
-                >
-                  <h3 className="mb-2 font-mono text-sm text-accent">{f.path}</h3>
-                  <div className="prose prose-invert prose-sm max-w-none text-text">
-                    <ReactMarkdown>{f.content ? f.content : "_Empty file_"}</ReactMarkdown>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </div>
-        ) : null}
-        {!showLivePane && !activePackForMarkdown ? (
-          <p className="text-text-muted">Pack data missing — pick another workspace or re-upload.</p>
-        ) : null}
-      </div>
-    </div>
+  const handleSaveFiles = useCallback(
+    (updates: Array<{ path: string; content: string }>) => {
+      if (packReadOnly || showLivePane) return;
+      const activeProject = userActive;
+      if (!activeProject || activeProject.kind !== "pack") return;
+      const pack = state.packs[activeProject.packId];
+      if (!pack) return;
+      if (updates.length === 0) return;
+      const updateMap = new Map(updates.map((entry) => [entry.path, entry.content]));
+      const seen = new Set<string>();
+      const nextFiles = pack.files.map((file) => {
+        const updatedContent = updateMap.get(file.path);
+        if (updatedContent == null) return file;
+        seen.add(file.path);
+        return { ...file, content: updatedContent };
+      });
+      for (const entry of updates) {
+        if (seen.has(entry.path)) continue;
+        nextFiles.push({ path: entry.path, content: entry.content });
+      }
+      persist({
+        ...state,
+        packs: {
+          ...state.packs,
+          [activeProject.packId]: { ...pack, files: nextFiles },
+        },
+      });
+    },
+    [packReadOnly, persist, showLivePane, state, userActive],
   );
 
-  const bookStrip =
-    bookContext && (bookContext.planningLinks?.length || bookContext.bookTitle || bookContext.embedReader) ? (
-      <div className="mb-4 rounded-xl border border-border/80 bg-dark-alt/50 px-3 py-2">
+  const switchToPackMode = useCallback(() => {
+    setModeOverride("pack");
+    if (previewPack) {
+      selectPreviewPack();
+      return;
+    }
+    if (surfaceBuiltinId || userActive?.kind === "pack") return;
+    const preferredBuiltin =
+      preferBuiltinPackId && builtinPacks.some((pack) => pack.id === preferBuiltinPackId)
+        ? preferBuiltinPackId
+        : builtinPacks[0]?.id;
+    if (preferredBuiltin) {
+      selectBuiltin(preferredBuiltin);
+      return;
+    }
+    if (userPackProjects[0]) {
+      selectUserPackProject(userPackProjects[0].id);
+    }
+  }, [
+    builtinPacks,
+    preferBuiltinPackId,
+    previewPack,
+    selectBuiltin,
+    selectPreviewPack,
+    selectUserPackProject,
+    surfaceBuiltinId,
+    userActive?.kind,
+    userPackProjects,
+  ]);
+
+  const exportWorkspace = useCallback(() => {
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+    const anchor = document.createElement("a");
+    anchor.href = URL.createObjectURL(blob);
+    anchor.download = `repo-planner-workspace-${new Date().toISOString().slice(0, 10)}.json`;
+    anchor.click();
+    URL.revokeObjectURL(anchor.href);
+  }, [state]);
+
+  const exportActivePack = useCallback(() => {
+    if (!activePack || showLivePane) return;
+    const blob = new Blob([JSON.stringify(activePack, null, 2)], { type: "application/json" });
+    const anchor = document.createElement("a");
+    anchor.href = URL.createObjectURL(blob);
+    const safe = activePack.name.replace(/[^\w\-]+/g, "-").slice(0, 48) || "pack";
+    anchor.download = `planning-pack-${safe}.json`;
+    anchor.click();
+    URL.revokeObjectURL(anchor.href);
+  }, [activePack, showLivePane]);
+
+  const contextStrip =
+    hostContext &&
+    (hostContext.quickLinks?.length || hostContext.surfaceLabel || hostContext.readingTargetId) ? (
+      <div className="mb-4 rounded-xl border border-border/80 bg-muted/30 px-3 py-2">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wider text-text-muted">Book</span>
-          <span className="text-sm text-primary">{bookContext.bookTitle ?? bookContext.bookSlug}</span>
-          {bookContext.planningLinks?.map((item) => (
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Context
+          </span>
+          <span className="text-sm text-foreground">
+            {hostContext.surfaceLabel ?? hostContext.readingTargetId}
+          </span>
+          {hostContext.quickLinks?.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className="rounded-full border border-border/60 bg-dark/40 px-2.5 py-1 text-xs text-text-muted transition hover:border-accent/40 hover:text-primary"
+              className="rounded-full border border-border/60 bg-background/60 px-2.5 py-1 text-xs text-muted-foreground transition hover:border-primary/40 hover:text-foreground"
             >
               {item.label}
             </Link>
@@ -311,49 +350,238 @@ export function PlanningCockpitDashboard({
       </div>
     ) : null;
 
-  if (!readerSrc) {
-    return (
-      <div className="flex flex-col">
-        {bookStrip}
-        {workspaceBody}
+  const workspaceBody = !hydrated ? (
+    <div className="flex min-h-[28rem] items-center justify-center rounded-xl border border-border bg-muted/20 p-8 text-center text-sm text-muted-foreground">
+      Loading workspace...
+    </div>
+  ) : (
+    <div className="grid min-h-[min(70vh,44rem)] gap-0 overflow-hidden rounded-xl border border-border/80 bg-background/40 lg:grid-cols-[17rem_minmax(0,1fr)]">
+      <PlanningWorkspaceSidebar
+        activeMode={activeMode}
+        liveLabel={liveProject.label}
+        showLiveSelected={showLivePane}
+        onSelectLive={selectLive}
+        previewPack={previewPack}
+        showPreviewSelected={previewSelected}
+        onSelectPreview={selectPreviewPack}
+        builtinPacks={builtinPacks}
+        surfaceBuiltinId={surfaceBuiltinId}
+        onSelectBuiltin={selectBuiltin}
+        userPackProjects={userPackProjects}
+        packs={state.packs}
+        activeProjectId={state.activeProjectId}
+        onSelectUserPackProject={selectUserPackProject}
+        selectedFilePath={selectedFilePath}
+        onSelectFile={handleSelectFile}
+        saveError={saveError}
+      />
+
+      <div className="relative flex min-h-0 min-w-0 flex-col border-border/80 bg-background/50 lg:border-l">
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept=".md,.mdx,.xml,.toml,.txt,text/markdown,text/plain,application/xml"
+          className="hidden"
+          onChange={(event) => void addPackFromFiles(event.target.files)}
+        />
+        <input
+          ref={previewInputRef}
+          type="file"
+          accept=".zip,.json,application/zip,application/json"
+          className="hidden"
+          onChange={(event) => void addPreviewPackFromUpload(event.target.files)}
+        />
+        <div className="border-b border-border/80 bg-muted/30 px-3 py-3 sm:px-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="space-y-1">
+              <div className="inline-flex rounded-lg border border-border/70 bg-background/70 p-1">
+                <button
+                  type="button"
+                  onClick={selectLive}
+                  className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium transition ${
+                    activeMode === "live" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <HardDrive className="size-3.5" />
+                  Live
+                </button>
+                <button
+                  type="button"
+                  onClick={switchToPackMode}
+                  className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium transition ${
+                    activeMode === "pack" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Layers className="size-3.5" />
+                  Pack
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {activeMode === "live"
+                  ? "Live reads the configured planning roots through the server bundle and stays read-only in this embed."
+                  : "Pack mode uses built-in, preview, or local uploaded files in this browser. No live repository labels or server writes are implied here."}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex rounded-lg border border-border/70 bg-background/70 p-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <FolderUp className="size-4" />
+                  Import
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => previewInputRef.current?.click()}
+                >
+                  <Layers className="size-4" />
+                  Preview upload
+                </Button>
+              </div>
+              <div className="inline-flex rounded-lg border border-border/70 bg-background/70 p-1">
+                <a
+                  href="/api/planning-templates/minimal"
+                  className="inline-flex h-9 items-center gap-1.5 rounded-md px-3 text-sm font-medium text-foreground transition hover:bg-muted/60"
+                >
+                  <Download className="size-4" />
+                  Init template
+                </a>
+              </div>
+              <div className="inline-flex rounded-lg border border-border/70 bg-background/70 p-1">
+                <Button type="button" variant="ghost" size="sm" className="gap-1.5" onClick={exportWorkspace}>
+                  <Download className="size-4" />
+                  Export workspace
+                </Button>
+                {activeMode === "pack" && activePack ? (
+                  <Button type="button" variant="ghost" size="sm" className="gap-1.5" onClick={exportActivePack}>
+                    <Download className="size-4" />
+                    Export pack
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div
+          className="relative flex min-h-0 flex-1 flex-col"
+          onDragEnter={(event) => {
+            if (event.dataTransfer?.types?.includes("Files")) setIsDraggingFiles(true);
+          }}
+          onDragOver={(event) => {
+            if (!event.dataTransfer?.types?.includes("Files")) return;
+            event.preventDefault();
+            setIsDraggingFiles(true);
+          }}
+          onDragLeave={(event) => {
+            if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+            setIsDraggingFiles(false);
+          }}
+          onDrop={(event) => {
+            if (!event.dataTransfer?.files?.length) return;
+            event.preventDefault();
+            setIsDraggingFiles(false);
+            void addPackFromFiles(event.dataTransfer.files);
+          }}
+        >
+          {isDraggingFiles ? (
+            <div className="pointer-events-none absolute inset-3 z-10 flex items-center justify-center rounded-xl border-2 border-dashed border-primary/50 bg-background/80 text-center text-sm text-foreground">
+              Drop planning files to create a local pack
+            </div>
+          ) : null}
+
+          {showLivePane ? (
+            <div className="min-h-[24rem] flex-1 overflow-hidden p-3 sm:p-4">{livePane}</div>
+          ) : activePack && packDataSource ? (
+            <div className="flex min-h-0 flex-1 flex-col gap-0 p-3 sm:p-4">
+              <div className="mb-3">
+                <h2 className="text-base font-semibold tracking-tight text-foreground">{activePack.name}</h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {activePack.files?.length ?? 0} file(s)
+                  {previewSelected
+                    ? " · preview upload (read-only, ephemeral)"
+                    : surfaceBuiltinId
+                      ? " · built-in pack (read-only)"
+                      : " · local pack in this browser"}
+                </p>
+              </div>
+              <Tabs
+                value={workspaceTab}
+                onValueChange={(value) => setWorkspaceTab(value as "cockpit" | "inspector" | "overview")}
+                className="flex min-h-0 flex-1 flex-col gap-3"
+              >
+                <TabsList className="h-9 w-fit shrink-0 bg-muted/60">
+                  <TabsTrigger value="cockpit" className="gap-1.5 text-xs sm:text-sm">
+                    <Layers className="size-3.5" />
+                    Cockpit
+                  </TabsTrigger>
+                  <TabsTrigger value="inspector" className="gap-1.5 text-xs sm:text-sm">
+                    <LayoutDashboard className="size-3.5" />
+                    Inspector
+                  </TabsTrigger>
+                  <TabsTrigger value="overview" className="gap-1.5 text-xs sm:text-sm">
+                    <LineChart className="size-3.5" />
+                    KPIs &amp; stats
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="cockpit" className="mt-0 min-h-0 flex-1 overflow-hidden">
+                  <PlanningCockpit dataSource={packDataSource} />
+                </TabsContent>
+                <TabsContent value="inspector" className="mt-0 min-h-0 flex-1 overflow-hidden">
+                  <PlanningFileInspector
+                    file={selectedFile}
+                    packReadOnly={packReadOnly}
+                    hostPolicy={policy}
+                    packFiles={activePack?.files ?? []}
+                    onSave={(path, nextContent) => handleSaveFiles([{ path, content: nextContent }])}
+                    onSaveMany={handleSaveFiles}
+                  />
+                </TabsContent>
+                <TabsContent value="overview" className="mt-0 min-h-0 flex-1 overflow-auto">
+                  <PlanningPackOverview kpis={kpis} workflow={packBundle?.workflow ?? null} hostPolicy={policy} />
+                </TabsContent>
+              </Tabs>
+            </div>
+          ) : (
+            <div className="flex flex-1 items-center justify-center p-8 text-center">
+              <div className="max-w-md space-y-2">
+                <p className="text-sm font-medium text-foreground">No pack selected</p>
+                <p className="text-sm text-muted-foreground">
+                  Choose a built-in pack, preview a zip or pack export, upload planning files, or drag them into this workspace to inspect a local planning bundle.
+                </p>
+                <div className="pt-2">
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    <Button type="button" variant="outline" size="sm" onClick={() => previewInputRef.current?.click()}>
+                      <Layers className="mr-2 size-4" />
+                      Preview pack or zip
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+                      <FolderUp className="mr-2 size-4" />
+                      Import planning files
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-    );
-  }
+    </div>
+  );
 
   return (
     <div className="flex flex-col">
-      {bookStrip}
-      <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as "workspace" | "reader")} className="w-full">
-        <TabsList className="mb-3 bg-dark-alt/80">
-          <TabsTrigger value="workspace" className="gap-1.5 data-[state=active]:bg-dark-elevated">
-            <LayoutDashboard size={14} />
-            Planning workspace
-          </TabsTrigger>
-          <TabsTrigger value="reader" className="gap-1.5 data-[state=active]:bg-dark-elevated">
-            <BookOpen size={14} />
-            EPUB reader
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value="workspace" className="mt-0">
-          {workspaceBody}
-        </TabsContent>
-        <TabsContent value="reader" className="mt-0">
-          <div className="overflow-hidden rounded-xl border border-border bg-black/20">
-            <iframe
-              title={`Reader: ${bookContext?.bookSlug ?? "book"}`}
-              src={readerSrc}
-              className="h-[min(72vh,800px)] w-full border-0 bg-dark"
-            />
-          </div>
-          <p className="mt-2 text-center text-[11px] text-text-muted">
-            Same reader as{" "}
-            <Link href={readerSrc} className="text-accent underline" target="_blank" rel="noreferrer">
-              Apps → Reader
-            </Link>{" "}
-            — embedded here so you can keep planning docs alongside the book.
-          </p>
-        </TabsContent>
-      </Tabs>
+      {contextStrip}
+      {workspaceBody}
     </div>
   );
 }

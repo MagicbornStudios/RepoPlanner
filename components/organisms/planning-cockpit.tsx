@@ -4,7 +4,7 @@ import { Activity, BarChart3, FileText, HelpCircle, LayoutGrid, ListTodo, Messag
 import { motion } from "motion/react";
 import type { ElementType } from "react";
 import * as React from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   LineChart,
   Line,
@@ -16,13 +16,13 @@ import {
   Bar,
 } from "recharts";
 import ReactMarkdown from "react-markdown";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "../ui/chart";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
+import { ScrollArea } from "../ui/scroll-area";
+import { Badge } from "../ui/badge";
 import { PlanningChatPanel } from "./planning-chat-panel";
 import { PlanningTestReportsTab } from "./planning-test-reports-tab";
 import { statusClassName, statusVariant } from "../planning/planning-status";
@@ -30,6 +30,13 @@ import { ProgressTracker } from "../tool-ui/progress-tracker";
 import { PanelSection } from "../ui/panel-section";
 import { EmptyState } from "../ui/empty-state";
 import { PlanningMetricCard } from "../molecules/planning-metric-card";
+import {
+  createApiPlanningCockpitDataSource,
+  type PlanningCockpitBundle,
+  type PlanningCockpitDataSource,
+  type PlanningCockpitMetricRow,
+  type PlanningCockpitUsageRow,
+} from "../../lib/planning-cockpit-data-source";
 
 /** React 19 JSX compatibility with recharts/react-markdown/lucide (dual ReactNode typings). */
 const LineChartC = LineChart as unknown as React.ComponentType<any>;
@@ -49,56 +56,89 @@ const POLL_MS = 8000;
 type SubTabDef = { id: string; label: string; icon: ElementType };
 type MainTabDef = { id: string; label: string; icon: ElementType; sub: SubTabDef[] };
 
-const MAIN_TABS: MainTabDef[] = [
-  { id: "overview", label: "Overview", icon: BarChart3 as unknown as ElementType, sub: [{ id: "dashboard", label: "Dashboard", icon: BarChart3 as unknown as ElementType }, { id: "reports", label: "Reports", icon: FileText as unknown as ElementType }] },
-  { id: "work", label: "Work", icon: ListTodo as unknown as ElementType, sub: [{ id: "tasks", label: "Tasks", icon: ListTodo as unknown as ElementType }, { id: "phases", label: "Phases", icon: LayoutGrid as unknown as ElementType }, { id: "questions", label: "Questions", icon: HelpCircle as unknown as ElementType }] },
-  { id: "state", label: "State", icon: Activity as unknown as ElementType, sub: [{ id: "state", label: "State", icon: Activity as unknown as ElementType }, { id: "agents", label: "Agents", icon: Users as unknown as ElementType }] },
-  { id: "tools", label: "Tools", icon: Terminal as unknown as ElementType, sub: [{ id: "terminal", label: "Terminal", icon: Terminal as unknown as ElementType }, { id: "tests", label: "Tests", icon: TestTube as unknown as ElementType }] },
-  { id: "chat", label: "Chat", icon: MessageCircle as unknown as ElementType, sub: [] },
-];
+function buildMainTabs(dataSource: PlanningCockpitDataSource): MainTabDef[] {
+  const tabs: MainTabDef[] = [
+    {
+      id: "overview",
+      label: "Overview",
+      icon: BarChart3 as unknown as ElementType,
+      sub: [
+        { id: "dashboard", label: "Dashboard", icon: BarChart3 as unknown as ElementType },
+        { id: "reports", label: "Reports", icon: FileText as unknown as ElementType },
+      ],
+    },
+    {
+      id: "work",
+      label: "Work",
+      icon: ListTodo as unknown as ElementType,
+      sub: [
+        { id: "tasks", label: "Tasks", icon: ListTodo as unknown as ElementType },
+        { id: "phases", label: "Phases", icon: LayoutGrid as unknown as ElementType },
+        { id: "questions", label: "Questions", icon: HelpCircle as unknown as ElementType },
+      ],
+    },
+    {
+      id: "state",
+      label: "State",
+      icon: Activity as unknown as ElementType,
+      sub: [
+        { id: "state", label: "State", icon: Activity as unknown as ElementType },
+        { id: "agents", label: "Agents", icon: Users as unknown as ElementType },
+      ],
+    },
+  ];
+
+  const toolTabs: SubTabDef[] = [];
+  if (dataSource.supportsTerminal) {
+    toolTabs.push({ id: "terminal", label: "Terminal", icon: Terminal as unknown as ElementType });
+  }
+  if (dataSource.supportsTestsTab) {
+    toolTabs.push({ id: "tests", label: "Tests", icon: TestTube as unknown as ElementType });
+  }
+  if (toolTabs.length > 0) {
+    tabs.push({
+      id: "tools",
+      label: "Tools",
+      icon: Terminal as unknown as ElementType,
+      sub: toolTabs,
+    });
+  }
+  if (dataSource.supportsChat) {
+    tabs.push({ id: "chat", label: "Chat", icon: MessageCircle as unknown as ElementType, sub: [] });
+  }
+  return tabs;
+}
 
 function getContentKey(main: string, sub: string): string {
   if (main === "chat") return "chat";
   return sub;
 }
 
-type MetricRow = {
-  at: string;
-  tasksTotal: number;
-  tasksDone: number;
-  completionRate: number;
-  openQuestionsCount: number;
-  activeAgentsCount: number;
-  snapshotTokensApprox?: number;
-  bundleTokensApprox?: number;
-};
-
-type UsageRow = { at: string; command: string };
-
-type Bundle = {
-  snapshot?: { currentPhase: string; currentPlan: string; status: string; nextAction?: string; agents?: Array<{ id: string; name: string; phase: string; plan: string; status: string }> };
-  openTasks?: Array<{ id: string; status: string; agentId: string; goal: string; phase: string }>;
-  openQuestions?: Array<{ phaseId: string; id: string; text: string; file?: string }>;
-  context?: { phaseIds?: string[]; paths?: string[]; summary?: { phases?: Array<{ id: string; title: string; status: string }> } };
-  agentsWithTasks?: Array<{ agent: { id: string; name: string; phase: string; plan: string; status: string }; tasks: Array<{ id: string; status: string; goal: string; phase: string }> }>;
-  format?: string;
-  generatedAt?: string;
-};
-
 const ACTIVE_AGENT_STATUSES = new Set(["in-progress", "in_progress", "active"]);
 
-export function PlanningCockpit() {
+export function PlanningCockpit({
+  dataSource,
+  apiBase = "",
+}: {
+  dataSource?: PlanningCockpitDataSource;
+  apiBase?: string;
+}) {
+  const resolvedDataSource = useMemo(
+    () => dataSource ?? createApiPlanningCockpitDataSource({ apiBase }),
+    [apiBase, dataSource],
+  );
+  const mainTabs = useMemo(() => buildMainTabs(resolvedDataSource), [resolvedDataSource]);
   const [mainTab, setMainTab] = useState("overview");
   const [subTab, setSubTab] = useState("dashboard");
   const contentKey = getContentKey(mainTab, subTab);
-  const currentMain = MAIN_TABS.find((t) => t.id === mainTab);
+  const currentMain = mainTabs.find((t) => t.id === mainTab);
   const setMainAndSub = useCallback((mainId: string) => {
     setMainTab(mainId);
-    const main = MAIN_TABS.find((t) => t.id === mainId);
+    const main = mainTabs.find((t) => t.id === mainId);
     if (main?.sub.length) setSubTab(main.sub[0].id);
-  }, []);
-  const [bundle, setBundle] = useState<Bundle | null>(null);
-  const [metricsData, setMetricsData] = useState<{ metrics: MetricRow[]; usage: UsageRow[] } | null>(null);
+  }, [mainTabs]);
+  const [bundle, setBundle] = useState<PlanningCockpitBundle | null>(null);
+  const [metricsData, setMetricsData] = useState<{ metrics: PlanningCockpitMetricRow[]; usage: PlanningCockpitUsageRow[] } | null>(null);
   const [reportMd, setReportMd] = useState<string | null>(null);
   const [cliInput, setCliInput] = useState("snapshot");
   const [cliOutput, setCliOutput] = useState<{ stdout: string; stderr: string }[]>([]);
@@ -113,41 +153,43 @@ export function PlanningCockpit() {
     setSubTab("tasks");
   }, []);
 
+  useEffect(() => {
+    if (mainTabs.some((t) => t.id === mainTab)) return;
+    setMainTab(mainTabs[0]?.id ?? "overview");
+    setSubTab(mainTabs[0]?.sub[0]?.id ?? "dashboard");
+  }, [mainTab, mainTabs]);
+
+  useEffect(() => {
+    if (!currentMain?.sub.length) return;
+    if (currentMain.sub.some((t) => t.id === subTab)) return;
+    setSubTab(currentMain.sub[0].id);
+  }, [currentMain, subTab]);
+
   const fetchState = useCallback(async () => {
     try {
-      const r = await fetch("/api/planning-state");
-      if (r.ok) {
-        const data = await r.json();
-        setBundle(data);
-      }
+      const data = await resolvedDataSource.getBundle();
+      setBundle(data);
     } catch {
       setBundle(null);
     }
-  }, []);
+  }, [resolvedDataSource]);
 
   const fetchMetrics = useCallback(async () => {
     try {
-      const r = await fetch("/api/planning-metrics?tail=80");
-      const body = await r.json();
-      if (!body.error) setMetricsData({ metrics: body.metrics ?? [], usage: body.usage ?? [] });
+      const payload = await resolvedDataSource.getMetrics();
+      if (payload) setMetricsData({ metrics: payload.metrics ?? [], usage: payload.usage ?? [] });
     } catch {
       // keep previous
     }
-  }, []);
+  }, [resolvedDataSource]);
 
   const fetchReport = useCallback(async () => {
     try {
-      const r = await fetch("/api/planning-reports/latest");
-      if (r.ok) {
-        const body = await r.json();
-        setReportMd(body.markdown ?? "");
-      } else {
-        setReportMd("");
-      }
+      setReportMd(await resolvedDataSource.getLatestReport());
     } catch {
       setReportMd("");
     }
-  }, []);
+  }, [resolvedDataSource]);
 
   useEffect(() => {
     fetchState();
@@ -164,15 +206,11 @@ export function PlanningCockpit() {
   }, [fetchState, fetchMetrics, fetchReport]);
 
   const runCli = async () => {
+    if (!resolvedDataSource.runCommand) return;
     const cmd = cliInput.trim() || "snapshot";
     setCliRunning(true);
     try {
-      const r = await fetch("/api/planning-cli/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ command: cmd }),
-      });
-      const body = await r.json();
+      const body = await resolvedDataSource.runCommand(cmd);
       setCliOutput((prev) => [...prev.slice(-49), { stdout: body.stdout || "", stderr: body.stderr || "" }]);
       if (body.ok) {
         setTimeout(() => {
@@ -188,6 +226,7 @@ export function PlanningCockpit() {
   const metrics = metricsData?.metrics ?? [];
   const usage = metricsData?.usage ?? [];
   const latest = metrics.length ? metrics[metrics.length - 1] : null;
+  const workflow = bundle?.workflow ?? null;
   const activeSnapshotAgents = (bundle?.snapshot?.agents ?? []).filter((agent) =>
     ACTIVE_AGENT_STATUSES.has(agent.status?.toLowerCase() ?? ""),
   );
@@ -203,12 +242,12 @@ export function PlanningCockpit() {
   const usageChartData = Object.entries(usageByCommand).map(([command, count]) => ({ command, count }));
 
   return (
-    <div className="repo-planner flex h-[calc(100vh-6rem)] flex-col gap-4 overflow-hidden rounded-xl border border-border/60 bg-card/50 shadow-xl">
-      <div className="flex flex-none items-center justify-between border-b border-border/60 px-4 py-3">
+    <div className="repo-planner flex h-[calc(100vh-6rem)] flex-col gap-4 overflow-hidden rounded-xl border border-border/70 bg-background/70 shadow-xl">
+      <div className="flex flex-none items-center justify-between border-b border-border/70 px-4 py-3">
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-semibold tracking-tight text-foreground">Planning cockpit</h1>
           <Badge variant="secondary" className="text-[10px] font-normal">
-            Live
+            {resolvedDataSource.badgeLabel}
           </Badge>
           {lastScan && (
             <span className="text-[10px] text-muted-foreground">
@@ -224,7 +263,7 @@ export function PlanningCockpit() {
       <div className="flex flex-1 flex-col overflow-hidden">
         <Tabs value={mainTab} onValueChange={setMainAndSub} className="flex flex-none flex-col">
           <TabsList className="mx-4 flex h-9 w-max gap-1 rounded-lg bg-muted/60 p-1" role="tablist" aria-label="Main section">
-            {MAIN_TABS.map((t) => {
+            {mainTabs.map((t) => {
               const Icon = t.icon;
               return (
                 <TabsTrigger key={t.id} value={t.id} className="gap-1.5 text-xs data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm" role="tab" aria-selected={mainTab === t.id}>
@@ -267,6 +306,206 @@ export function PlanningCockpit() {
           >
           {contentKey === "dashboard" && (
           <div className="h-full overflow-auto">
+            {workflow && (
+              <div className="mb-4 space-y-4">
+                <div className="grid gap-3 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+                  <Card className="border-border/50">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm">Workflow Reminder</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3 text-sm">
+                      <div className="rounded-md border border-border/40 bg-muted/20 p-3">
+                        <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Read order</p>
+                        <ul className="mt-2 space-y-1 text-sm text-foreground">
+                          {workflow.reminder.readOrder.map((item) => (
+                            <li key={item}>{item}</li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="rounded-md border border-border/40 bg-muted/20 p-3">
+                        <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Rules</p>
+                        <ul className="mt-2 space-y-1 text-sm text-foreground">
+                          {workflow.reminder.rules.map((rule) => (
+                            <li key={rule}>{rule}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <div className="grid gap-3">
+                    <Card className="border-border/50">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm">Current Sprint</CardTitle>
+                      </CardHeader>
+                      <CardContent className="grid gap-3 text-sm sm:grid-cols-2">
+                        <div className="rounded-md border border-border/40 bg-muted/20 p-3">
+                          <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Window</div>
+                          <div className="mt-1 font-mono text-sm text-foreground">
+                            Sprint {workflow.sprint.sprintIndex} · {workflow.sprint.phaseIds.join(", ")}
+                          </div>
+                        </div>
+                        <div className="rounded-md border border-border/40 bg-muted/20 p-3">
+                          <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Progress</div>
+                          <div className="mt-1 text-lg font-semibold text-foreground">{workflow.sprint.progressPercent}%</div>
+                          <div className="text-xs text-muted-foreground">
+                            {workflow.sprint.activePhaseCount} active / {workflow.sprint.openPhaseCount} open
+                          </div>
+                        </div>
+                        <div className="rounded-md border border-border/40 bg-muted/20 p-3">
+                          <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Workflow warnings</div>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            <Badge variant="outline" className="text-[10px]">kickoff {workflow.overview.kickoffRequiredCount}</Badge>
+                            <Badge variant="outline" className="text-[10px]">done gate {workflow.overview.doneGateBlockedCount}</Badge>
+                            <Badge variant="outline" className="text-[10px]">needs discussion {workflow.overview.needsDiscussionCount}</Badge>
+                          </div>
+                        </div>
+                        <div className="rounded-md border border-border/40 bg-muted/20 p-3">
+                          <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Ownership</div>
+                          <div className="mt-1 text-sm font-medium text-foreground">{workflow.ownership.label}</div>
+                          <div className="mt-1 text-xs text-muted-foreground">{workflow.ownership.rationale}</div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="border-border/50">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm">Ownership Guidance</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3 text-sm">
+                        <div>
+                          <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Edit targets</div>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {workflow.ownership.targetFiles.map((target) => (
+                              <Badge key={target} variant="secondary" className="text-[10px] font-mono">
+                                {target}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                        <ul className="space-y-1 text-sm text-muted-foreground">
+                          {workflow.ownership.rules.map((rule) => (
+                            <li key={rule}>{rule}</li>
+                          ))}
+                        </ul>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+
+                <PanelSection title="Recommended phases">
+                  <div className="grid gap-3 xl:grid-cols-2">
+                    {workflow.recommendations.map((recommendation) => (
+                      <Card key={recommendation.phaseId} className="border-border/50">
+                        <CardHeader className="pb-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <CardTitle className="text-sm">{recommendation.phaseId} · {recommendation.title}</CardTitle>
+                            <Badge variant="secondary" className="text-[10px]">{recommendation.action}</Badge>
+                            <Badge variant="outline" className="text-[10px]">score {recommendation.score}</Badge>
+                            <Badge variant="outline" className="text-[10px]">effort {recommendation.effortLabel}</Badge>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="space-y-3 text-sm">
+                          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                            <span>progress {recommendation.progressPercent}%</span>
+                            <span>open questions {recommendation.openQuestionsCount}</span>
+                            <span>answered {recommendation.answeredQuestionsCount}</span>
+                          </div>
+
+                          {recommendation.whyNow.length > 0 && (
+                            <div>
+                              <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Why now</div>
+                              <ul className="mt-1 space-y-1">
+                                {recommendation.whyNow.map((item) => (
+                                  <li key={item}>{item}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="rounded-md border border-border/40 bg-muted/20 p-3">
+                              <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Kickoff</div>
+                              <div className="mt-1 font-medium text-foreground">
+                                {recommendation.kickoff.required ? "Recommended" : "Not required"}
+                              </div>
+                              {recommendation.kickoff.reasons.length > 0 ? (
+                                <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+                                  {recommendation.kickoff.reasons.map((reason) => (
+                                    <li key={reason}>{reason}</li>
+                                  ))}
+                                </ul>
+                              ) : null}
+                              <div className="mt-2 text-[11px] text-muted-foreground">
+                                Path: <span className="font-mono">{recommendation.kickoff.suggestedPath}</span>
+                              </div>
+                            </div>
+
+                            <div className="rounded-md border border-border/40 bg-muted/20 p-3">
+                              <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Done gate</div>
+                              <div className="mt-1 font-medium text-foreground">
+                                {recommendation.doneGate.ready ? "Ready to close" : "Blocked"}
+                              </div>
+                              {recommendation.doneGate.reasons.length > 0 ? (
+                                <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+                                  {recommendation.doneGate.reasons.map((reason) => (
+                                    <li key={reason}>{reason}</li>
+                                  ))}
+                                </ul>
+                              ) : null}
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {recommendation.doneGate.requiredChecks.map((check) => (
+                                  <Badge key={check} variant="outline" className="text-[10px]">
+                                    {check}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+
+                          {recommendation.warnings.length > 0 && (
+                            <div>
+                              <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Warnings</div>
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {recommendation.warnings.map((warning) => (
+                                  <Badge key={warning} variant="outline" className="text-[10px]">
+                                    {warning}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {recommendation.openQuestions.length > 0 && (
+                            <div>
+                              <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Open questions</div>
+                              <ul className="mt-1 space-y-1 text-sm text-foreground">
+                                {recommendation.openQuestions.map((question) => (
+                                  <li key={question}>{question}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {recommendation.answeredQuestions.length > 0 && (
+                            <details className="rounded-md border border-border/40 bg-muted/10 p-3">
+                              <summary className="cursor-pointer text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                                Answered history ({recommendation.answeredQuestionsCount})
+                              </summary>
+                              <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+                                {recommendation.answeredQuestions.map((question) => (
+                                  <li key={question}>{question}</li>
+                                ))}
+                              </ul>
+                            </details>
+                          )}
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </PanelSection>
+              </div>
+            )}
             {latest && (
               <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <PlanningMetricCard
@@ -290,7 +529,7 @@ export function PlanningCockpit() {
                 />
               </div>
             )}
-            {chartData.length > 0 && (
+            {chartData.length > 1 && (
               <div className="space-y-4">
                 <ChartContainer config={{ completionRate: { label: "Completion %" } }} className="h-[220px] w-full">
                   <LineChartC data={chartData} margin={{ left: 12, right: 12 }}>
@@ -314,8 +553,13 @@ export function PlanningCockpit() {
                 )}
               </div>
             )}
+            {!resolvedDataSource.supportsHistoricalMetrics && metrics.length <= 1 && (
+              <p className="text-sm text-muted-foreground">
+                Historical charts are not available for this source.
+              </p>
+            )}
             {metrics.length === 0 && (
-              <p className="text-sm text-muted-foreground">Run <code className="rounded bg-muted px-1">planning report generate</code> to populate metrics.</p>
+              <p className="text-sm text-muted-foreground">{resolvedDataSource.emptyMetricsMessage}</p>
             )}
           </div>
           )}
@@ -328,7 +572,7 @@ export function PlanningCockpit() {
                     <ReactMarkdownC>{reportMd}</ReactMarkdownC>
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground" title="Run planning report generate in Terminal.">No report. Run <code className="rounded bg-muted px-1">report generate</code> in Terminal.</p>
+                  <p className="text-sm text-muted-foreground">{resolvedDataSource.emptyReportMessage}</p>
                 )
               ) : (
                 <p className="text-sm text-muted-foreground">Loading…</p>
@@ -520,12 +764,12 @@ export function PlanningCockpit() {
             )}
           </div>
           )}
-          {contentKey === "tests" && (
+          {contentKey === "tests" && resolvedDataSource.supportsTestsTab && (
           <div className="h-full overflow-auto">
             <PlanningTestReportsTab />
           </div>
           )}
-          {contentKey === "terminal" && (
+          {contentKey === "terminal" && resolvedDataSource.supportsTerminal && (
           <div className="flex h-full min-h-[320px] flex-col gap-2">
             <div className="flex flex-none gap-2">
               <Input
@@ -535,7 +779,7 @@ export function PlanningCockpit() {
                 placeholder="planning snapshot"
                 className="font-mono text-sm"
               />
-              <Button onClick={runCli} disabled={cliRunning}>
+              <Button onClick={runCli} disabled={cliRunning || !resolvedDataSource.runCommand}>
                 {cliRunning ? "Running…" : "Run"}
               </Button>
             </div>
@@ -556,7 +800,7 @@ export function PlanningCockpit() {
             </div>
           </div>
           )}
-          {contentKey === "chat" && (
+          {contentKey === "chat" && resolvedDataSource.supportsChat && (
           <div className="h-full min-h-0 overflow-hidden">
             <PlanningChatPanel
               context={{

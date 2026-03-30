@@ -6,15 +6,16 @@
 
 /* Fallbacks: define internal vars from host or defaults, then re-expose standard names in scope */
 .repo-planner {
+  color-scheme: dark;
   /* Internal fallbacks (no recursion) */
   --rp-fg: var(--foreground, #f1f5f9);
   --rp-muted: var(--muted-foreground, #94a3b8);
-  --rp-card: var(--card, #1e293b);
+  --rp-card: var(--card, #172033);
   --rp-border: var(--border, #334155);
-  --rp-bg: var(--background, #0f172a);
-  --rp-primary: var(--primary, #818cf8);
+  --rp-bg: var(--background, #0b1220);
+  --rp-primary: var(--primary, #d6a25e);
   --rp-destructive: var(--destructive, #ef4444);
-  --rp-muted-bg: var(--muted, #1e293b);
+  --rp-muted-bg: var(--muted, #141c2d);
   /* Re-expose so Tailwind/shadcn classes work; host values win when set */
   --foreground: var(--rp-fg);
   --muted-foreground: var(--rp-muted);
@@ -61,4 +62,10 @@
 .repo-planner .planning-diff-remove {
   background-color: color-mix(in oklch, var(--color-planning-diff-remove), transparent 85%);
   color: color-mix(in oklch, var(--color-planning-diff-remove), white 20%);
+}
+
+.repo-planner :where(button, [role="tab"], a, input, textarea):focus-visible,
+.planning-cockpit-host :where(button, [role="tab"], a, input, textarea):focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--rp-primary), transparent 45%);
 }

@@ -1,7 +1,17 @@
 "use client";
-/** Stub for IDE/typecheck when developing this submodule in isolation. Host provides real impl. */
-import * as React from "react";
 
-export const Collapsible = (p: React.ComponentProps<"div"> & { open?: boolean; onOpenChange?: (open: boolean) => void; asChild?: boolean }) => <div data-state="open" {...p} />;
-export const CollapsibleTrigger = (p: React.ComponentProps<"button">) => <button type="button" {...p} />;
-export const CollapsibleContent = (p: React.ComponentProps<"div">) => <div {...p} />;
+import { Collapsible as CollapsiblePrimitive } from "@base-ui/react/collapsible";
+
+function Collapsible({ ...props }: CollapsiblePrimitive.Root.Props) {
+  return <CollapsiblePrimitive.Root data-slot="collapsible" {...props} />;
+}
+
+function CollapsibleTrigger({ ...props }: CollapsiblePrimitive.Trigger.Props) {
+  return <CollapsiblePrimitive.Trigger data-slot="collapsible-trigger" {...props} />;
+}
+
+function CollapsibleContent({ ...props }: CollapsiblePrimitive.Panel.Props) {
+  return <CollapsiblePrimitive.Panel data-slot="collapsible-content" {...props} />;
+}
+
+export { Collapsible, CollapsibleTrigger, CollapsibleContent };

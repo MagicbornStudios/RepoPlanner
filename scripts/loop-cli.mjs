@@ -7,7 +7,16 @@ import http from "node:http";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import { runPlanningEmbedBuildSync, formatEmbedBuildLogLine } from "./lib/embed-builtin-packs-build.mjs";
-import { XMLParser } from "fast-xml-parser";
+import {
+  ensureArray,
+  planningXmlParser,
+  parseProgressTableFromMarkdown,
+  parseRoadmapPhasesFromMarkdown,
+  parseRoadmapXmlString,
+  parseStateXmlString,
+  parseTaskRegistryXmlString,
+} from "../lib/planning-parse-core.mjs";
+import { buildPlanningWorkflowSnapshot } from "../lib/planning-workflow.mjs";
 import TOML from "@iarna/toml";
 import ejs from "ejs";
 
@@ -59,13 +68,17 @@ function getConfigPath() {
   return path.join(getPlanningDir(), "planning-config.toml");
 }
 
+function normalizePhaseId(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  return /^\d+$/.test(raw) ? raw.padStart(2, "0") : raw;
+}
+
 const ROOT = getRoot();
 const PLANNING_DIR = getPlanningDir();
 const PHASES_DIR = getPhasesDir();
 const TEMPLATES_DIR = getTemplatesDir();
 const CONFIG_PATH = getConfigPath();
-const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_" });
-
 /** Versioned format for the agent loop bundle. No single industry standard; MCP is for tools. We use planning-agent-context so consumers can validate. */
 const AGENT_LOOP_BUNDLE_FORMAT = "planning-agent-context/1.0";
 
@@ -125,11 +138,6 @@ const VIEWER_HTML = `<!DOCTYPE html>
 </body>
 </html>`;
 
-function ensureArray(x) {
-  if (x == null) return [];
-  return Array.isArray(x) ? x : [x];
-}
-
 async function getConfig() {
   try {
     const raw = await fs.readFile(CONFIG_PATH, "utf8");
@@ -172,75 +180,22 @@ async function loadState() {
   const p = path.join(PLANNING_DIR, "STATE.xml");
   const xml = await readIfExists(p);
   if (!xml) return null;
-  const obj = parser.parse(xml);
-  const state = obj?.state ?? obj;
-  const registry = state["agent-registry"];
-  const agents = registry?.agent != null ? ensureArray(registry.agent) : [];
-  return {
-    currentPhase: state["current-phase"] ?? "",
-    currentPlan: state["current-plan"] ?? "",
-    status: state["status"] ?? "",
-    nextAction: state["next-action"] ?? "",
-    agents: agents.map((a) => ({
-      id: a["@_id"] ?? "",
-      name: a.name ?? "",
-      phase: a.phase ?? "",
-      plan: a.plan ?? "",
-      status: a.status ?? "",
-      since: a.since ?? "",
-    })),
-    raw: state,
-  };
+  return parseStateXmlString(xml);
 }
 
 async function loadTaskRegistry() {
   const p = path.join(PLANNING_DIR, "TASK-REGISTRY.xml");
   const xml = await readIfExists(p);
   if (!xml) return null;
-  const obj = parser.parse(xml);
-  const reg = obj["task-registry"] ?? obj;
-  const phases = ensureArray(reg.phase ?? []);
-  const tasks = [];
-  for (const ph of phases) {
-    const phaseId = String(ph["@_id"] ?? "").padStart(2, "0");
-    const phaseTasks = ensureArray(ph.task ?? []);
-    for (const t of phaseTasks) {
-      const goal = t.goal ?? "";
-      const keywords = t.keywords ?? "";
-      const commands = t.commands?.command != null ? ensureArray(t.commands.command) : [];
-      tasks.push({
-        id: t["@_id"] ?? "",
-        agentId: t["@_agent-id"] ?? "",
-        status: t["@_status"] ?? "",
-        phase: phaseId,
-        goal: typeof goal === "string" ? goal : (goal["#text"] ?? ""),
-        keywords: typeof keywords === "string" ? keywords : (keywords["#text"] ?? ""),
-        commands,
-      });
-    }
-  }
-  return { tasks, phases };
+  return parseTaskRegistryXmlString(xml);
 }
 
 async function loadRoadmap() {
   const p = path.join(PLANNING_DIR, "ROADMAP.xml");
   const xml = await readIfExists(p);
   if (!xml) return null;
-  const obj = parser.parse(xml);
-  const road = obj.roadmap ?? obj;
-  const phaseList = ensureArray(road.phase ?? []);
-  const phases = phaseList.map((ph) => {
-    const goal = ph.goal ?? "";
-    return {
-      id: String(ph["@_id"] ?? "").padStart(2, "0"),
-      title: ph.title ?? "",
-      goal: typeof goal === "string" ? goal : (goal["#text"] ?? ""),
-      status: ph.status ?? "",
-      depends: ph.depends ?? "",
-      plans: ph.plans ?? "",
-    };
-  });
-  return phases.sort((a, b) => Number(a.id) - Number(b.id));
+  const r = parseRoadmapXmlString(xml);
+  return r ? r.phases : null;
 }
 
 function getSprintPhaseIds(roadmapPhases, sprintSize, sprintIndex) {
@@ -429,7 +384,7 @@ async function getReferencesDocStats() {
   return { docs, totalChars, totalTokens };
 }
 
-async function loadOpenQuestions(opts = {}) {
+async function loadPhaseQuestions(opts = {}) {
   const includeClosed = opts.all === true;
   const phaseFilter = opts.phase != null ? String(opts.phase).padStart(2, "0") : null;
   const results = [];
@@ -446,10 +401,11 @@ async function loadOpenQuestions(opts = {}) {
       const xml = await readIfExists(path.join(phaseDirPath, f.name));
       if (!xml) continue;
       try {
-        const obj = parser.parse(xml);
+        const obj = planningXmlParser.parse(xml);
         const plan = obj["phase-plan"] ?? obj;
         const questions = plan.questions?.question != null ? ensureArray(plan.questions.question) : [];
         const planId = plan.meta?.["phase-id"] ?? f.name.replace(/-PLAN\.xml$/i, "");
+        const normalizedPlanPhaseId = normalizePhaseId(planId);
         const out = [];
         for (const q of questions) {
           const status = (q["@_status"] ?? q.status ?? "open").toLowerCase();
@@ -459,13 +415,24 @@ async function loadOpenQuestions(opts = {}) {
           if (!includeClosed && status !== "open") continue;
           out.push({ id, status, text });
         }
-        if (out.length || includeClosed) results.push({ phaseId: phaseId ?? planId, planFile: f.name, planPath: path.relative(ROOT, path.join(phaseDirPath, f.name)), questions: out });
+        if (out.length || includeClosed) {
+          results.push({
+            phaseId: normalizedPlanPhaseId || phaseId || normalizePhaseId(planId),
+            planFile: f.name,
+            planPath: path.relative(ROOT, path.join(phaseDirPath, f.name)),
+            questions: out,
+          });
+        }
       } catch {
         // skip malformed
       }
     }
   }
   return results.sort((a, b) => (a.phaseId || "").localeCompare(b.phaseId || ""));
+}
+
+async function loadOpenQuestions(opts = {}) {
+  return loadPhaseQuestions({ ...opts, all: false });
 }
 
 async function loadPlansExecution(opts = {}) {
@@ -658,7 +625,7 @@ async function buildSystemMetrics() {
   const errorsXml = await readIfExists(errorsPath);
   if (errorsXml) {
     try {
-      const obj = parser.parse(errorsXml);
+      const obj = planningXmlParser.parse(errorsXml);
       const root = obj["errors-and-attempts"] ?? obj;
       const attempts = root.attempt != null ? ensureArray(root.attempt) : [];
       errorsAttemptsCount = attempts.length;
@@ -1291,72 +1258,6 @@ function extractDocFromReferences(refXml, docPath) {
   return match ? match[1] : null;
 }
 
-function parseProgressTable(markdown) {
-  const lines = markdown.split("\n").map((line) => line.replace(/\r$/, ""));
-  const progressStart = lines.findIndex((line) => line.trim() === "## Progress");
-  if (progressStart === -1) return new Map();
-  const map = new Map();
-  for (let i = progressStart + 1; i < lines.length; i++) {
-    const line = lines[i];
-    if (!line.trim()) continue;
-    if (!line.startsWith("|")) break;
-    if (line.includes("---")) continue;
-    const cells = line.split("|").map((c) => c.trim()).filter(Boolean);
-    if (cells.length < 3) continue;
-    const phaseCell = cells[0];
-    const statusCell = cells[2];
-    const idMatch = phaseCell.match(/^(\d+)\./);
-    if (!idMatch) continue;
-    const id = idMatch[1].padStart(2, "0");
-    map.set(id, statusCell);
-  }
-  return map;
-}
-
-function parseRoadmapPhases(markdown) {
-  const lines = markdown.split("\n").map((line) => line.replace(/\r$/, ""));
-  const phases = [];
-  let current = null;
-  for (const line of lines) {
-    const heading = line.match(/^### Phase\s+(\d+)\s*:?\s*(.+)$/);
-    if (heading) {
-      if (current) phases.push(current);
-      current = {
-        id: heading[1].padStart(2, "0"),
-        title: heading[2].trim(),
-        goal: "",
-        requirements: "",
-        depends: "",
-        plans: "",
-      };
-      continue;
-    }
-    if (!current) continue;
-    const goal = line.match(/^\*\*Goal:\*\*\s*(.*)$/);
-    if (goal) {
-      current.goal = goal[1].trim();
-      continue;
-    }
-    const req = line.match(/^\*\*Requirements:\*\*\s*(.*)$/);
-    if (req) {
-      current.requirements = req[1].trim();
-      continue;
-    }
-    const dep = line.match(/^\*\*Depends on:\*\*\s*(.*)$/);
-    if (dep) {
-      current.depends = dep[1].trim();
-      continue;
-    }
-    const plans = line.match(/^\*\*Plans:\*\*\s*(.*)$/);
-    if (plans) {
-      current.plans = plans[1].trim();
-      continue;
-    }
-  }
-  if (current) phases.push(current);
-  return phases;
-}
-
 async function migratePlanningMarkdown() {
   const mdFiles = [
     "ROADMAP.md",
@@ -1465,8 +1366,8 @@ async function migrateRoadmapFromReferences() {
   if (!refXml) throw new Error("REQUIREMENTS.xml not found.");
   const roadmapMd = extractDocFromReferences(refXml, "ROADMAP.md");
   if (!roadmapMd) throw new Error("ROADMAP.md not found inside REQUIREMENTS.xml");
-  const phases = parseRoadmapPhases(roadmapMd);
-  const progress = parseProgressTable(roadmapMd);
+  const phases = parseRoadmapPhasesFromMarkdown(roadmapMd);
+  const progress = parseProgressTableFromMarkdown(roadmapMd);
   const lines = ["<roadmap>"];
   for (const phase of phases) {
     lines.push(`  <phase id="${phase.id}">`);
@@ -1613,6 +1514,194 @@ const TASK_REGISTRY_REF = ".planning/TASK-REGISTRY.xml";
 const ROADMAP_REF = ".planning/ROADMAP.xml";
 const AGENTS_MD_REF = "AGENTS.md";
 
+function formatWorkflowLines(workflow) {
+  if (!workflow) return [];
+  const lines = [];
+  lines.push("WORKFLOW");
+  lines.push(`  ${workflow.reminder.title} (${workflow.reminder.deepLinkPath})`);
+  for (const item of workflow.reminder.readOrder) lines.push(`    read: ${item}`);
+  for (const rule of workflow.reminder.rules) lines.push(`    rule: ${rule}`);
+  lines.push(
+    `  Sprint ${workflow.sprint.sprintIndex}  phases=${workflow.sprint.phaseIds.join(", ")}  progress=${workflow.sprint.progressPercent}%  open=${workflow.sprint.openPhaseCount}`,
+  );
+  lines.push(
+    `  Warnings  stale=${workflow.overview.stalePhasesCount}  missing-tests=${workflow.overview.missingTestsCount}  missing-dod=${workflow.overview.missingDodCount}  needs-discussion=${workflow.overview.needsDiscussionCount}  kickoff=${workflow.overview.kickoffRequiredCount}  done-gate=${workflow.overview.doneGateBlockedCount}  orphan-tasks=${workflow.overview.orphanTasksCount}`,
+  );
+  lines.push(
+    `  Ownership  ${workflow.ownership.label}  targets=${workflow.ownership.targetFiles.join(", ") || "—"}`,
+  );
+  if (workflow.recommendations.length > 0) {
+    lines.push("", "  RECOMMENDED");
+    for (const [index, recommendation] of workflow.recommendations.slice(0, 5).entries()) {
+      lines.push(
+        `    ${index + 1}. ${recommendation.phaseId} ${recommendation.title}  score=${recommendation.score}  action=${recommendation.action}  progress=${recommendation.progressPercent}%  effort=${recommendation.effortLabel}`,
+      );
+      if (recommendation.whyNow.length > 0) lines.push(`       why: ${recommendation.whyNow.join(" | ")}`);
+      if (recommendation.warnings.length > 0) lines.push(`       warn: ${recommendation.warnings.join(" | ")}`);
+      lines.push(
+        `       kickoff: ${recommendation.kickoff.required ? "required" : "not-required"}  gate=${recommendation.doneGate.ready ? "ready" : "blocked"}  owner=${recommendation.ownershipGuidance.label}`,
+      );
+      if (recommendation.kickoff.reasons.length > 0) lines.push(`       kickoff-why: ${recommendation.kickoff.reasons.join(" | ")}`);
+      if (recommendation.doneGate.reasons.length > 0) lines.push(`       gate-why: ${recommendation.doneGate.reasons.join(" | ")}`);
+      if (recommendation.answeredQuestionsCount > 0) {
+        lines.push(`       answered: ${recommendation.answeredQuestionsCount} question history item(s)`);
+      }
+    }
+  }
+  lines.push("");
+  return lines;
+}
+
+async function buildWorkflowSnapshotForSprint({ state, reg, roadmap, phaseIds, sprintIndex, sprintSize }) {
+  const allQuestions = (await loadPhaseQuestions({ all: true })).flatMap((record) =>
+    record.questions.map((question) => ({
+      phaseId: record.phaseId,
+      id: question.id,
+      text: question.text,
+      status: question.status,
+      file: record.planPath,
+    })),
+  );
+  const reviewItems = computeReviewItems(reg, roadmap);
+  const phases = (roadmap ?? [])
+    .filter((phase) => phaseIds.includes(phase.id))
+    .map((phase) => ({
+      id: phase.id,
+      title: phase.title,
+      status: phase.status,
+      goal: phase.goal ?? "",
+      depends: phase.depends ?? "",
+      tasks: (reg?.tasks ?? [])
+        .filter((task) => task.phase === phase.id)
+        .map((task) => ({
+          id: task.id,
+          status: task.status,
+          goal: task.goal,
+          agentId: task.agentId,
+          commands: task.commands,
+        })),
+    }));
+  return buildPlanningWorkflowSnapshot({
+    phases,
+    taskRows: (reg?.tasks ?? []).map((task) => ({
+      id: task.id,
+      status: task.status,
+      goal: task.goal,
+      agentId: task.agentId,
+      phase: task.phase,
+      commands: task.commands,
+    })),
+    roadmapPhases: (roadmap ?? []).map((phase) => ({
+      id: phase.id,
+      title: phase.title,
+      status: phase.status,
+      goal: phase.goal ?? "",
+      depends: phase.depends ?? "",
+    })),
+    openQuestions: allQuestions.filter((question) => question.status !== "answered"),
+    questionRecords: allQuestions,
+    currentPhaseId: state?.currentPhase ?? "",
+    sprintIndex,
+    sprintSize,
+    reviewItems,
+    ownership: "global",
+    ownershipContext: {
+      recommendedScope: "global",
+      label: "Global / root planning",
+      rationale: "The CLI is reading the shared configured planning root, so Global is the default ownership target unless one section clearly owns delivery and maintenance.",
+      targetFiles: ["AGENTS.md", ".planning/ROADMAP.xml", ".planning/STATE.xml", ".planning/TASK-REGISTRY.xml"],
+      rules: [
+        "Use Global when the phase changes shared tooling, workflow policy, CI, or cross-section architecture.",
+        "Move section-local implementation details into a section planner instead of duplicating the full task graph in both places.",
+      ],
+    },
+    policy: {
+      kickoffHoursThreshold: 6,
+    },
+  });
+}
+
+async function buildWorkflowRecommendationForPhase(phaseId, opts = {}) {
+  const state = await loadState();
+  const reg = await loadTaskRegistry();
+  const roadmap = await loadRoadmap();
+  if (!reg || !roadmap) return null;
+  const normalizedPhaseId = normalizePhaseId(phaseId || state?.currentPhase);
+  const phase = roadmap.find((entry) => normalizePhaseId(entry.id) === normalizedPhaseId);
+  if (!phase) return null;
+  const workflow = await buildWorkflowSnapshotForSprint({
+    state,
+    reg,
+    roadmap,
+    phaseIds: [normalizedPhaseId],
+    sprintIndex: opts.sprintIndex ?? 0,
+    sprintSize: opts.sprintSize ?? (await getConfig()).sprintSize ?? 5,
+  });
+  return workflow.recommendations.find((entry) => normalizePhaseId(entry.phaseId) === normalizedPhaseId) ?? null;
+}
+
+function formatWorkflowRecommendationDetails(recommendation) {
+  if (!recommendation) return "No workflow detail available.";
+  const lines = [];
+  lines.push(`phase: ${recommendation.phaseId}`);
+  lines.push(`title: ${recommendation.title}`);
+  lines.push(`action: ${recommendation.action}`);
+  lines.push(`score: ${recommendation.score}`);
+  lines.push(`kickoff: ${recommendation.kickoff.required ? "required" : "not-required"}`);
+  if (recommendation.kickoff.reasons.length > 0) {
+    lines.push(`kickoff-reasons: ${recommendation.kickoff.reasons.join(" | ")}`);
+  }
+  lines.push(`kickoff-path: ${recommendation.kickoff.suggestedPath}`);
+  lines.push(`done-gate: ${recommendation.doneGate.ready ? "ready" : "blocked"}`);
+  if (recommendation.doneGate.reasons.length > 0) {
+    lines.push(`done-gate-reasons: ${recommendation.doneGate.reasons.join(" | ")}`);
+  }
+  lines.push(`ownership: ${recommendation.ownershipGuidance.label}`);
+  lines.push(`ownership-rationale: ${recommendation.ownershipGuidance.rationale}`);
+  lines.push(`ownership-targets: ${recommendation.ownershipGuidance.targetFiles.join(", ") || "—"}`);
+  if (recommendation.answeredQuestionsCount > 0) {
+    lines.push(`answered-questions: ${recommendation.answeredQuestionsCount}`);
+  }
+  return lines.join("\n");
+}
+
+function formatKickoffBlock(recommendation) {
+  if (!recommendation) return "No workflow detail available.";
+  const checklist = recommendation.kickoff.checklist || {};
+  const yesNo = (value) => (value ? "yes" : "no");
+  const lines = [];
+  lines.push(`## Kickoff: \`${recommendation.phaseId}\``);
+  lines.push("");
+  lines.push("| Field | Notes |");
+  lines.push("| --- | --- |");
+  lines.push(`| \`goal\` | ${recommendation.title} |`);
+  lines.push(`| \`scope\` | ${checklist.scope ? "Define implementation scope and intended outputs." : "Refresh scope before implementation."} |`);
+  lines.push(`| \`non-goals\` | ${checklist.nonGoals ? "List explicit non-goals so the phase stays bounded." : "Capture non-goals before work starts."} |`);
+  lines.push(`| \`dependencies\` | ${checklist.dependencies ? "Review current blockers and prerequisite phases." : "Dependencies need to be recorded."} |`);
+  lines.push(`| \`tests required\` | ${recommendation.doneGate.executable ? "Passing tests are required before this phase can be marked done." : "Document verification even if no executable tests are needed."} |`);
+  lines.push(`| \`definition of done\` | ${checklist.definitionOfDone ? "Record the specific closure bar for this phase." : "Definition of done needs to be written."} |`);
+  lines.push(`| \`first tasks\` | ${checklist.firstTasks ? "List the first concrete tasks and ownership split." : "Break the phase into first tasks before implementation."} |`);
+  lines.push(`| \`open questions\` | ${recommendation.openQuestionsCount > 0 ? recommendation.openQuestions.join(" / ") : "None recorded."} |`);
+  lines.push("");
+  lines.push("### Kickoff checklist");
+  lines.push("");
+  lines.push(`- scope captured: ${yesNo(checklist.scope)}`);
+  lines.push(`- non-goals captured: ${yesNo(checklist.nonGoals)}`);
+  lines.push(`- dependencies captured: ${yesNo(checklist.dependencies)}`);
+  lines.push(`- tests required captured: ${yesNo(checklist.testsRequired)}`);
+  lines.push(`- definition of done captured: ${yesNo(checklist.definitionOfDone)}`);
+  lines.push(`- first tasks captured: ${yesNo(checklist.firstTasks)}`);
+  if (recommendation.kickoff.reasons.length > 0) {
+    lines.push("");
+    lines.push("### Why kickoff is required");
+    lines.push("");
+    for (const reason of recommendation.kickoff.reasons) {
+      lines.push(`- ${reason}`);
+    }
+  }
+  return lines.join("\n");
+}
+
 function formatSnapshotLines(stateXml, taskXml, roadmapPhases = null, opts = null) {
   const agents = parseAgentsFromState(stateXml).filter((a) => (a.status || "").toLowerCase() !== "inactive");
   const allTasks = parseTasks(taskXml);
@@ -1627,6 +1716,11 @@ function formatSnapshotLines(stateXml, taskXml, roadmapPhases = null, opts = nul
     lines.push("");
     agentsMd.split("\n").forEach((ln) => lines.push(ln));
     lines.push("", "────────────────────────────────────────", "");
+  }
+
+  const workflow = typeof opts === "object" && opts?.workflow;
+  if (workflow) {
+    formatWorkflowLines(workflow).forEach((line) => lines.push(line));
   }
 
   lines.push(`STATE (${STATE_FILE_REF})`);
@@ -1728,6 +1822,16 @@ async function snapshotToString(opts = {}) {
   let snapshotOpts = { sprintPhaseIds: phaseIds };
   if (Object.keys(phaseFileRefs).length) snapshotOpts.phaseFileRefs = phaseFileRefs;
   if (opts.agentsMdContent) snapshotOpts.agentsMdContent = opts.agentsMdContent;
+  if (reg) {
+    snapshotOpts.workflow = await buildWorkflowSnapshotForSprint({
+      state,
+      reg,
+      roadmap,
+      phaseIds,
+      sprintIndex: k,
+      sprintSize: size,
+    });
+  }
   if (opts.similarity !== false) {
     const pairs = await computePhaseSimilarity(phaseIds, roadmap, reg);
     if (pairs) snapshotOpts.phaseSimilarity = pairs;
@@ -1767,6 +1871,16 @@ async function snapshot(opts = {}) {
     if (refs.length) phaseFileRefs[id] = refs;
   }
   if (Object.keys(phaseFileRefs).length) snapshotOpts.phaseFileRefs = phaseFileRefs;
+  if (reg) {
+    snapshotOpts.workflow = await buildWorkflowSnapshotForSprint({
+      state,
+      reg,
+      roadmap,
+      phaseIds,
+      sprintIndex: k,
+      sprintSize: size,
+    });
+  }
   if (opts.similarity !== false) {
     const pairs = await computePhaseSimilarity(phaseIds, roadmap, reg);
     if (pairs) snapshotOpts.phaseSimilarity = pairs;
@@ -2018,6 +2132,14 @@ async function buildAgentLoopBundle(opts = {}) {
   }
 
   const reviewItems = computeReviewItems(reg, roadmap);
+  const workflow = await buildWorkflowSnapshotForSprint({
+    state,
+    reg,
+    roadmap,
+    phaseIds,
+    sprintIndex,
+    sprintSize: size,
+  });
 
   return {
     format: AGENT_LOOP_BUNDLE_FORMAT,
@@ -2031,6 +2153,7 @@ async function buildAgentLoopBundle(opts = {}) {
     openQuestions: openQuestions.flatMap((r) => r.questions.map((q) => ({ phaseId: r.phaseId, id: q.id, text: q.text, file: r.planPath }))),
     agentsWithTasks,
     reviewItems,
+    workflow,
   };
 }
 
@@ -2340,9 +2463,9 @@ function buildProgram() {
       }
     });
 
-  program
+  const workflowCmd = program
     .command("workflow")
-    .description("Print agent workflow summary (also shown in planning --help)")
+    .description("Workflow-aware planning helpers: recommendations, kickoff, done gate, and ownership guidance.")
     .action(() => {
       console.log(WORKFLOW_HELP_TEXT.trim());
     });
@@ -2751,7 +2874,7 @@ function buildProgram() {
     .option("--all", "Include closed questions")
     .option("--json", "Output as JSON")
     .action(async (opts) => {
-      const results = await loadOpenQuestions(opts);
+      const results = await loadPhaseQuestions(opts);
       if (opts.json) {
         console.log(JSON.stringify(results, null, 2));
       } else {
@@ -2763,6 +2886,107 @@ function buildProgram() {
           }
         }
         if (results.length === 0) console.log("No open questions found.");
+      }
+    });
+
+  workflowCmd
+    .command("show")
+    .description("Show the current workflow snapshot")
+    .option("--json", "Output as JSON")
+    .action(async (opts) => {
+      const state = await loadState();
+      const reg = await loadTaskRegistry();
+      const roadmap = await loadRoadmap();
+      if (!reg || !roadmap) {
+        console.error("STATE.xml, TASK-REGISTRY.xml, or ROADMAP.xml not found.");
+        process.exitCode = 1;
+        return;
+      }
+      const config = await getConfig();
+      const size = config.sprintSize ?? 5;
+      const idx = roadmap.findIndex((phase) => phase.id === state?.currentPhase || normalizePhaseId(state?.currentPhase) === phase.id);
+      const sprintIndex = idx >= 0 ? Math.floor(idx / size) : 0;
+      const phaseIds = getSprintPhaseIds(roadmap, size, sprintIndex);
+      const workflow = await buildWorkflowSnapshotForSprint({
+        state,
+        reg,
+        roadmap,
+        phaseIds,
+        sprintIndex,
+        sprintSize: size,
+      });
+      if (opts.json) {
+        console.log(JSON.stringify(workflow, null, 2));
+      } else {
+        console.log(formatWorkflowLines(workflow).join("\n"));
+      }
+    });
+  workflowCmd
+    .command("kickoff [phaseId]")
+    .description("Show kickoff guidance for a phase")
+    .option("--json", "Output as JSON")
+    .action(async (phaseId, opts) => {
+      const recommendation = await buildWorkflowRecommendationForPhase(phaseId);
+      if (!recommendation) {
+        console.error("Phase not found in workflow scope.");
+        process.exitCode = 1;
+        return;
+      }
+      const payload = {
+        phaseId: recommendation.phaseId,
+        title: recommendation.title,
+        kickoff: recommendation.kickoff,
+      };
+      if (opts.json) {
+        console.log(JSON.stringify(payload, null, 2));
+      } else {
+        console.log(formatWorkflowRecommendationDetails(recommendation));
+        console.log("");
+        console.log(formatKickoffBlock(recommendation));
+      }
+    });
+  workflowCmd
+    .command("done-gate [phaseId]")
+    .description("Show closeout gate status for a phase")
+    .option("--json", "Output as JSON")
+    .action(async (phaseId, opts) => {
+      const recommendation = await buildWorkflowRecommendationForPhase(phaseId);
+      if (!recommendation) {
+        console.error("Phase not found in workflow scope.");
+        process.exitCode = 1;
+        return;
+      }
+      const payload = {
+        phaseId: recommendation.phaseId,
+        title: recommendation.title,
+        doneGate: recommendation.doneGate,
+      };
+      if (opts.json) {
+        console.log(JSON.stringify(payload, null, 2));
+      } else {
+        console.log(formatWorkflowRecommendationDetails(recommendation));
+      }
+    });
+  workflowCmd
+    .command("ownership [phaseId]")
+    .description("Show ownership guidance for a phase")
+    .option("--json", "Output as JSON")
+    .action(async (phaseId, opts) => {
+      const recommendation = await buildWorkflowRecommendationForPhase(phaseId);
+      if (!recommendation) {
+        console.error("Phase not found in workflow scope.");
+        process.exitCode = 1;
+        return;
+      }
+      const payload = {
+        phaseId: recommendation.phaseId,
+        title: recommendation.title,
+        ownership: recommendation.ownershipGuidance,
+      };
+      if (opts.json) {
+        console.log(JSON.stringify(payload, null, 2));
+      } else {
+        console.log(formatWorkflowRecommendationDetails(recommendation));
       }
     });
 
@@ -3010,7 +3234,7 @@ function buildProgram() {
       try {
         const content = await fs.readFile(full, "utf8");
         if (opts.json && (full.endsWith(".xml") || content.trimStart().startsWith("<?xml") || content.trimStart().startsWith("<"))) {
-          const obj = parser.parse(content);
+          const obj = planningXmlParser.parse(content);
           console.log(JSON.stringify(obj, null, 2));
         } else {
           process.stdout.write(content);
@@ -3086,6 +3310,17 @@ function buildProgram() {
     .command("task-update <taskId> <status> [agentId]")
     .description("Update task status and optionally assign agent")
     .action(async (taskId, status, agentId) => {
+      const normalizedStatus = String(status ?? "").toLowerCase();
+      if (["done", "complete", "completed"].includes(normalizedStatus)) {
+        const reg = await loadTaskRegistry();
+        const task = reg?.tasks?.find((entry) => entry.id === taskId);
+        const recommendation = task ? await buildWorkflowRecommendationForPhase(task.phase) : null;
+        if (recommendation?.doneGate?.executable && !recommendation.doneGate.hasTestCommand) {
+          console.error("Refusing to mark %s done: tests are missing from the phase verification path.", taskId);
+          process.exitCode = 1;
+          return;
+        }
+      }
       const taskPath = path.join(PLANNING_DIR, "TASK-REGISTRY.xml");
       const xml = await readIfExists(taskPath);
       if (!xml) {
@@ -3137,6 +3372,24 @@ function buildProgram() {
     .command("phase-update <phaseId> <status>")
     .description("Update phase status in ROADMAP.xml")
     .action(async (phaseId, status) => {
+      const normalizedStatus = String(status ?? "").toLowerCase();
+      if (["done", "complete", "completed"].includes(normalizedStatus)) {
+        const recommendation = await buildWorkflowRecommendationForPhase(phaseId);
+        if (!recommendation) {
+          console.error("Phase %s not found.", phaseId);
+          process.exitCode = 1;
+          return;
+        }
+        if (!recommendation.doneGate.ready) {
+          console.error(
+            "Refusing to mark %s done: %s",
+            recommendation.phaseId,
+            recommendation.doneGate.reasons.join(" | "),
+          );
+          process.exitCode = 1;
+          return;
+        }
+      }
       const roadmapPath = path.join(PLANNING_DIR, "ROADMAP.xml");
       const xml = await readIfExists(roadmapPath);
       if (!xml) {
