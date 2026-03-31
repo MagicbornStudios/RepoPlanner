@@ -10,12 +10,35 @@
   /* Internal fallbacks (no recursion) */
   --rp-fg: var(--foreground, #f1f5f9);
   --rp-muted: var(--muted-foreground, #94a3b8);
-  --rp-card: var(--card, #172033);
-  --rp-border: var(--border, #334155);
-  --rp-bg: var(--background, #0b1220);
+  --rp-card: color-mix(in oklch, var(--card, #17120f) 78%, black);
+  --rp-border: color-mix(in oklch, var(--primary, #d6a25e) 22%, var(--border, #3a2f28));
+  --rp-bg: color-mix(in oklch, var(--background, #0d0a08) 82%, black);
   --rp-primary: var(--primary, #d6a25e);
   --rp-destructive: var(--destructive, #ef4444);
-  --rp-muted-bg: var(--muted, #141c2d);
+  --rp-muted-bg: color-mix(in oklch, var(--muted, #16110d) 55%, black);
+  --rp-tree-bg: color-mix(in oklch, var(--card, #17120f) 82%, black);
+  --rp-tree-border: color-mix(in oklch, var(--primary, #d6a25e) 28%, transparent);
+  --rp-tree-divider: color-mix(in oklch, var(--primary, #d6a25e) 16%, transparent);
+  --rp-tab-rail: color-mix(in oklch, var(--card, #17120f) 88%, black);
+  --rp-tab-active-bg: color-mix(in oklch, var(--primary, #d6a25e) 10%, var(--card, #17120f));
+  --rp-tab-active-border: color-mix(in oklch, var(--primary, #d6a25e) 34%, transparent);
+  --rp-tab-active-text: color-mix(in oklch, var(--primary, #d6a25e) 78%, white);
+  --rp-action-bg: color-mix(in oklch, var(--card, #17120f) 76%, black);
+  --rp-soft-border: color-mix(in oklch, var(--primary, #d6a25e) 20%, transparent);
+  --rp-context-bg: color-mix(in oklch, var(--popover, var(--card, #17120f)) 90%, black);
+  --rp-context-border: color-mix(in oklch, var(--primary, #d6a25e) 26%, transparent);
+  --rp-size-chip-bg: color-mix(in oklch, var(--background, #0d0a08) 60%, var(--card, #17120f));
+  --rp-size-chip-border: color-mix(in oklch, var(--primary, #d6a25e) 24%, transparent);
+  --rp-hover-bg: color-mix(in oklch, var(--primary, #d6a25e) 8%, transparent);
+  --rp-scrollbar-thumb: color-mix(in oklch, var(--primary, #d6a25e) 22%, var(--border, #3a2f28));
+  --rp-scrollbar-thumb-hover: color-mix(in oklch, var(--primary, #d6a25e) 34%, var(--border, #3a2f28));
+  --rp-file-md: var(--primary, #d6a25e);
+  --rp-file-mdx: var(--chart-4, #d9b45f);
+  --rp-file-xml: var(--chart-2, #d28d5e);
+  --rp-file-toml: var(--chart-5, #6f88a3);
+  --rp-file-json: var(--chart-3, #ba6d58);
+  --rp-file-txt: var(--muted-foreground, #94a3b8);
+  --rp-file-default: var(--accent-foreground, var(--primary, #d6a25e));
   /* Re-expose so Tailwind/shadcn classes work; host values win when set */
   --foreground: var(--rp-fg);
   --muted-foreground: var(--rp-muted);
@@ -68,4 +91,60 @@
 .planning-cockpit-host :where(button, [role="tab"], a, input, textarea):focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px color-mix(in oklch, var(--rp-primary), transparent 45%);
+}
+
+.repo-planner [role="tablist"] {
+  border: 1px solid var(--rp-soft-border);
+}
+
+.repo-planner [role="tab"] {
+  color: var(--rp-muted);
+  border: 1px solid transparent;
+}
+
+.repo-planner [role="tab"]:hover {
+  background: var(--rp-hover-bg);
+  color: var(--rp-fg);
+}
+
+.repo-planner [role="tab"][data-state="active"] {
+  background: var(--rp-tab-active-bg);
+  border-color: var(--rp-tab-active-border);
+  color: var(--rp-tab-active-text);
+}
+
+.repo-planner .rp-tree-row:hover {
+  background: var(--rp-hover-bg);
+}
+
+.repo-planner .repo-planner-scroll {
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.repo-planner .repo-planner-scroll::-webkit-scrollbar {
+  width: var(--scrollbar-size, 6px);
+  height: var(--scrollbar-size, 6px);
+}
+
+.repo-planner .repo-planner-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.repo-planner .repo-planner-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+}
+
+.repo-planner .repo-planner-scroll:hover {
+  scrollbar-color: var(--rp-scrollbar-thumb) transparent;
+}
+
+.repo-planner .repo-planner-scroll:hover::-webkit-scrollbar-thumb {
+  background: var(--rp-scrollbar-thumb);
+}
+
+.repo-planner .repo-planner-scroll:hover::-webkit-scrollbar-thumb:hover {
+  background: var(--rp-scrollbar-thumb-hover);
 }

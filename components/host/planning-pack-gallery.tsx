@@ -1,358 +1,829 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ChevronDown, Download, Expand, X } from "lucide-react";
-import type { PlanningPackItem, PlanningPackManifest } from "../../lib/planning-pack-types";
-import { stripPlanningPackPreviewPreamble } from "../../lib/planning-pack-types";
+import React, {
+  type CSSProperties,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import JSZip from "jszip";
+import {
+  ChevronDown,
+  Download,
+  FileText,
+  Folder,
+  FolderOpen,
+} from "lucide-react";
+import type {
+  PlanningPackGalleryTab,
+  PlanningPackItem,
+  PlanningPackManifest,
+} from "../../lib/planning-pack-types";
+import { cn } from "../../lib/utils";
+import { Button, buttonVariants } from "../ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible";
+import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
 
 export type PlanningPackGalleryProps = {
-  manifest: PlanningPackManifest | null;
+  tabs?: PlanningPackGalleryTab[];
+  manifest?: PlanningPackManifest | null;
+  loading?: boolean;
   loadError: string | null;
-  tab: "demo" | "site";
-  onTab: (t: "demo" | "site") => void;
-  expanded: PlanningPackItem | null;
-  docHtml: string;
-  docLoading: boolean;
-  onCloseExpand: () => void;
-  onExpand: (item: PlanningPackItem) => void;
-  /** Convert markdown to HTML (host usually passes `marked.parse` with gfm). */
-  renderMarkdown: (md: string) => string;
-  /** Optional override; default strips export preamble + frontmatter. */
+  tab: string;
+  onTab: (tabId: string) => void;
+  /** Legacy no-op preview props kept for host compatibility. */
+  expanded?: PlanningPackItem | null;
+  docHtml?: string;
+  docLoading?: boolean;
+  onCloseExpand?: () => void;
+  onExpand?: (item: PlanningPackItem) => void;
+  renderMarkdown?: (md: string) => string;
   stripForPreview?: (raw: string) => string;
+  /** Legacy fallback labels when tabs are inferred from `manifest`. */
   demoTabLabel?: string;
   siteTabLabel?: string;
 };
 
-const PREVIEW_CHAR_CAP = 4500;
+type TreeFileNode = {
+  kind: "file";
+  key: string;
+  name: string;
+  item: PlanningPackItem;
+};
+
+type TreeDirNode = {
+  kind: "dir";
+  key: string;
+  name: string;
+  children: TreeNode[];
+  items: PlanningPackItem[];
+};
+
+type TreeNode = TreeDirNode | TreeFileNode;
+
+type FileTone = {
+  iconBackground: string;
+  iconBorder: string;
+  iconText: string;
+  extensionText: string;
+};
+
+type ContextMenuAction = {
+  id: string;
+  label: string;
+  onSelect: () => void;
+};
+
+type ContextMenuState = {
+  x: number;
+  y: number;
+  title: string;
+  actions: ContextMenuAction[];
+};
+
+const TAB_RAIL_STYLE: CSSProperties = {
+  backgroundColor: "var(--rp-tab-rail)",
+  boxShadow: "inset 0 0 0 1px var(--rp-soft-border)",
+};
+
+const TREE_STYLE: CSSProperties = {
+  backgroundColor: "var(--rp-tree-bg)",
+  boxShadow: "inset 0 0 0 1px var(--rp-tree-border)",
+};
+
+const HOVER_ACTION_STYLE: CSSProperties = {
+  backgroundColor: "var(--rp-action-bg)",
+  boxShadow: "inset 0 0 0 1px var(--rp-soft-border)",
+};
+
+const CONTEXT_MENU_STYLE: CSSProperties = {
+  backgroundColor: "var(--rp-context-bg)",
+  boxShadow: "0 12px 32px rgba(0,0,0,0.34), inset 0 0 0 1px var(--rp-context-border)",
+};
+
+const SIZE_CHIP_STYLE: CSSProperties = {
+  backgroundColor: "var(--rp-size-chip-bg)",
+  boxShadow: "inset 0 0 0 1px var(--rp-size-chip-border)",
+};
 
 export function PlanningPackGallery({
+  tabs,
   manifest,
+  loading = false,
   loadError,
   tab,
   onTab,
-  expanded,
-  docHtml,
-  docLoading,
-  onCloseExpand,
-  onExpand,
-  renderMarkdown,
-  stripForPreview = stripPlanningPackPreviewPreamble,
   demoTabLabel = "Starter template",
   siteTabLabel = "This site",
 }: PlanningPackGalleryProps) {
-  const items = useMemo(() => {
+  const [downloadingKey, setDownloadingKey] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+
+  const resolvedTabs = useMemo(() => {
+    if (tabs?.length) return tabs;
     if (!manifest) return [];
-    return tab === "demo" ? manifest.demo : manifest.site;
-  }, [manifest, tab]);
+
+    return [
+      {
+        id: "demo",
+        label: demoTabLabel,
+        items: manifest.demo,
+        mode: "sections",
+      },
+      {
+        id: "site",
+        label: siteTabLabel,
+        items: manifest.site,
+        mode: "collapsible-sections",
+      },
+    ] satisfies PlanningPackGalleryTab[];
+  }, [demoTabLabel, manifest, siteTabLabel, tabs]);
+
+  const activeTab = useMemo(
+    () => resolvedTabs.find((entry) => entry.id === tab) ?? resolvedTabs[0] ?? null,
+    [resolvedTabs, tab],
+  );
 
   const grouped = useMemo(() => {
-    const m = new Map<string, PlanningPackItem[]>();
-    for (const it of items) {
-      const k = it.sectionLabel;
-      m.set(k, [...(m.get(k) || []), it]);
+    const groups = new Map<string, PlanningPackItem[]>();
+    for (const item of activeTab?.items ?? []) {
+      const groupKey = item.sectionLabel;
+      groups.set(groupKey, [...(groups.get(groupKey) ?? []), item]);
     }
-    return [...m.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [items]);
+    return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [activeTab]);
 
-  const siteSections = tab === "site";
+  useEffect(() => {
+    if (!contextMenu) return;
+
+    const close = () => setContextMenu(null);
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        close();
+      }
+    };
+
+    window.addEventListener("pointerdown", close, true);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    window.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      window.removeEventListener("pointerdown", close, true);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [contextMenu]);
+
+  async function downloadItemsAsZip(items: PlanningPackItem[], label: string, key: string) {
+    if (items.length === 0) return;
+
+    setDownloadingKey(key);
+    try {
+      const zip = new JSZip();
+      const usedPaths = new Map<string, number>();
+
+      for (const item of items) {
+        const response = await fetch(item.file);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch ${item.filename}`);
+        }
+
+        const archivePath = dedupeArchivePath(resolveArchivePath(item), usedPaths);
+        zip.file(archivePath, await response.blob());
+      }
+
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      triggerBlobDownload(zipBlob, `${slugify(label)}.zip`);
+    } finally {
+      setDownloadingKey(null);
+    }
+  }
+
+  function openContextMenu(
+    event: React.MouseEvent,
+    title: string,
+    actions: ContextMenuAction[],
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      title,
+      actions,
+    });
+  }
+
+  const usesCollapsibleSections = activeTab?.mode === "collapsible-sections";
 
   return (
-    <>
-      <div className="flex gap-2 border-b border-border/60 px-5 py-2">
-        <TabBtn active={tab === "demo"} onClick={() => onTab("demo")}>
-          {demoTabLabel}
-        </TabBtn>
-        <TabBtn active={tab === "site"} onClick={() => onTab("site")}>
-          {siteTabLabel}
-        </TabBtn>
+    <Tabs
+      value={tab}
+      onValueChange={onTab}
+      className="repo-planner flex min-h-0 flex-1 flex-col overflow-hidden"
+    >
+      <div className="border-b border-border/30 px-4 py-3">
+        <TabsList
+          className="inline-flex flex-wrap items-center gap-1 rounded-2xl p-1"
+          style={TAB_RAIL_STYLE}
+        >
+          {resolvedTabs.map((entry) => (
+            <TabsTrigger
+              key={entry.id}
+              value={entry.id}
+              className="h-8 rounded-xl px-3 text-sm font-medium data-[state=active]:shadow-none"
+            >
+              {entry.icon ? (
+                <span className="mr-1.5 inline-flex shrink-0 items-center text-sm leading-none">
+                  {entry.icon}
+                </span>
+              ) : null}
+              <span className="truncate">{entry.label}</span>
+            </TabsTrigger>
+          ))}
+        </TabsList>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-5 py-6">
+      <div className="repo-planner-scroll flex-1 overflow-y-auto px-4 py-3">
         {loadError ? (
-          <p className="text-sm text-red-400">{loadError}</p>
-        ) : !manifest ? (
-          <p className="text-sm text-text-muted">Loading manifest…</p>
-        ) : siteSections ? (
-          <div className="space-y-3">
-            {grouped.map(([label, group]) => (
-              <PlanningSectionCollapsible
-                key={label}
-                label={label}
-                slugHint={group[0]?.section}
-                count={group.length}
-                items={group}
-                onExpand={onExpand}
-                renderMarkdown={renderMarkdown}
-                stripForPreview={stripForPreview}
-              />
-            ))}
-          </div>
+          <p className="text-sm text-destructive">{loadError}</p>
+        ) : loading ? (
+          <p className="text-sm text-muted-foreground">Loading example packs...</p>
+        ) : !activeTab ? (
+          <p className="text-sm text-muted-foreground">No planning packs available.</p>
         ) : (
-          grouped.map(([label, group]) => (
-            <section key={label} className="mb-10 last:mb-0">
-              <h3 className="mb-4 font-display text-lg text-primary">{label}</h3>
-              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                {group.map((item) => (
-                  <PlanCard
-                    key={item.id}
-                    item={item}
-                    onExpand={() => void onExpand(item)}
-                    renderMarkdown={renderMarkdown}
-                    stripForPreview={stripForPreview}
-                  />
-                ))}
-              </div>
-            </section>
-          ))
+          <div className="space-y-3">
+            {activeTab.description ? (
+              <p className="text-xs leading-relaxed text-muted-foreground">{activeTab.description}</p>
+            ) : null}
+            {grouped.length === 0 ? (
+              <p className="text-sm text-muted-foreground">{activeTab.emptyMessage ?? "No planning packs available."}</p>
+            ) : usesCollapsibleSections ? (
+              grouped.map(([label, group]) => (
+                <PackSectionTree
+                  key={label}
+                  label={label}
+                  slugHint={group[0]?.section}
+                  items={group}
+                  downloading={downloadingKey === label}
+                  defaultOpen={false}
+                  onDownloadItems={(itemsToDownload, downloadLabel) =>
+                    void downloadItemsAsZip(itemsToDownload, downloadLabel, downloadLabel)
+                  }
+                  onOpenContextMenu={openContextMenu}
+                />
+              ))
+            ) : (
+              grouped.map(([label, group]) => (
+                <PackSectionTree
+                  key={label}
+                  label={label}
+                  items={group}
+                  downloading={downloadingKey === label}
+                  defaultOpen
+                  onDownloadItems={(itemsToDownload, downloadLabel) =>
+                    void downloadItemsAsZip(itemsToDownload, downloadLabel, downloadLabel)
+                  }
+                  onOpenContextMenu={openContextMenu}
+                />
+              ))
+            )}
+          </div>
         )}
       </div>
 
-      {expanded ? (
-        <div className="fixed inset-0 z-[210] flex">
-          <button
-            type="button"
-            className="min-h-0 min-w-0 flex-1 bg-black/55 backdrop-blur-[2px]"
-            aria-label="Close preview"
-            onClick={onCloseExpand}
-          />
-          <div className="flex h-full w-full max-w-xl flex-col overflow-hidden border-l border-border bg-dark shadow-2xl sm:max-w-2xl">
-            <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-primary">{expanded.title}</p>
-                <p className="truncate text-xs text-text-muted">{expanded.filename}</p>
-              </div>
-              <div className="flex shrink-0 gap-2">
-                <a
-                  href={expanded.file}
-                  download={expanded.filename}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-primary hover:border-accent"
-                >
-                  <Download size={14} />
-                  Download
-                </a>
-                <button
-                  type="button"
-                  onClick={onCloseExpand}
-                  className="rounded-full border border-border p-2 text-text-muted hover:text-primary"
-                  aria-label="Back to gallery"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-            </div>
-            <div className="flex-1 overflow-y-auto px-4 py-4">
-              {docLoading ? (
-                <p className="text-sm text-text-muted">Loading…</p>
-              ) : (
-                <article
-                  className="prose prose-invert prose-sm max-w-none prose-headings:text-primary prose-a:text-accent prose-code:text-text"
-                  dangerouslySetInnerHTML={{ __html: docHtml }}
-                />
-              )}
-            </div>
+      {contextMenu ? (
+        <div
+          className="fixed z-[220] min-w-[11rem] max-w-[16rem] overflow-hidden rounded-xl"
+          style={{
+            ...CONTEXT_MENU_STYLE,
+            left: Math.min(contextMenu.x, window.innerWidth - 220),
+            top: Math.min(contextMenu.y, window.innerHeight - 180),
+          }}
+          onClick={(event) => event.stopPropagation()}
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          <div className="border-b border-border/60 px-3 py-2 text-[11px] font-medium text-muted-foreground">
+            {contextMenu.title}
+          </div>
+          <div className="p-1.5">
+            {contextMenu.actions.map((action) => (
+              <button
+                key={action.id}
+                type="button"
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-foreground transition hover:bg-muted/55"
+                onClick={() => {
+                  action.onSelect();
+                  setContextMenu(null);
+                }}
+              >
+                <Download size={14} className="shrink-0 text-muted-foreground" />
+                <span className="truncate">{action.label}</span>
+              </button>
+            ))}
           </div>
         </div>
       ) : null}
+    </Tabs>
+  );
+}
+
+function PackSectionTree({
+  label,
+  slugHint,
+  items,
+  downloading,
+  defaultOpen,
+  onDownloadItems,
+  onOpenContextMenu,
+}: {
+  label: string;
+  slugHint?: string;
+  items: PlanningPackItem[];
+  downloading: boolean;
+  defaultOpen: boolean;
+  onDownloadItems: (itemsToDownload: PlanningPackItem[], label: string) => void;
+  onOpenContextMenu: (
+    event: React.MouseEvent,
+    title: string,
+    actions: ContextMenuAction[],
+  ) => void;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const tree = useMemo(() => buildSectionTree(items, slugHint), [items, slugHint]);
+
+  return (
+    <section className="space-y-2.5">
+      <Collapsible open={open} onOpenChange={setOpen}>
+        <div className="group flex items-center gap-2">
+          <CollapsibleTrigger
+            type="button"
+            className="rp-tree-row flex min-w-0 flex-1 items-center gap-2 rounded-lg px-1 py-0.5 text-left transition"
+            style={{ backgroundColor: "transparent" }}
+            onContextMenu={(event) =>
+              onOpenContextMenu(event, label, [
+                {
+                  id: "download-folder",
+                  label: "Download folder as ZIP",
+                  onSelect: () => onDownloadItems(items, label),
+                },
+              ])
+            }
+          >
+            <ChevronDown
+              size={14}
+              className={cn("shrink-0 text-muted-foreground transition-transform", open && "rotate-180")}
+            />
+            {open ? (
+              <FolderOpen size={15} className="shrink-0 text-accent" />
+            ) : (
+              <Folder size={15} className="shrink-0 text-accent" />
+            )}
+            <span className="min-w-0 truncate text-sm font-semibold text-foreground">{label}</span>
+            <span className="truncate text-[11px] text-muted-foreground">{formatSectionMeta(items, slugHint)}</span>
+          </CollapsibleTrigger>
+          <button
+            type="button"
+            aria-label={`Download ${label}`}
+            className="opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100"
+            onClick={() => onDownloadItems(items, label)}
+          >
+            <span
+              className={cn(
+                buttonVariants({ variant: "ghost", size: "icon-xs" }),
+                "rounded-md text-muted-foreground hover:text-foreground",
+              )}
+              style={HOVER_ACTION_STYLE}
+            >
+              <Download size={13} />
+            </span>
+          </button>
+        </div>
+        <CollapsibleContent>
+          <div className="overflow-hidden rounded-xl" style={TREE_STYLE}>
+            <div className="p-1.5">
+              <TreeNodes
+                nodes={tree}
+                depth={0}
+                onDownloadItems={onDownloadItems}
+                onOpenContextMenu={onOpenContextMenu}
+              />
+            </div>
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
+    </section>
+  );
+}
+
+function TreeNodes({
+  nodes,
+  depth,
+  onDownloadItems,
+  onOpenContextMenu,
+}: {
+  nodes: TreeNode[];
+  depth: number;
+  onDownloadItems: (itemsToDownload: PlanningPackItem[], label: string) => void;
+  onOpenContextMenu: (
+    event: React.MouseEvent,
+    title: string,
+    actions: ContextMenuAction[],
+  ) => void;
+}) {
+  return (
+    <>
+      {nodes.map((node) =>
+        node.kind === "dir" ? (
+          <TreeDir
+            key={node.key}
+            node={node}
+            depth={depth}
+            onDownloadItems={onDownloadItems}
+            onOpenContextMenu={onOpenContextMenu}
+          />
+        ) : (
+          <TreeFile
+            key={node.key}
+            node={node}
+            depth={depth}
+            onOpenContextMenu={onOpenContextMenu}
+          />
+        ),
+      )}
     </>
   );
 }
 
-function PlanningSectionCollapsible({
-  label,
-  slugHint,
-  count,
-  items,
-  onExpand,
-  renderMarkdown,
-  stripForPreview,
+function TreeDir({
+  node,
+  depth,
+  onDownloadItems,
+  onOpenContextMenu,
 }: {
-  label: string;
-  slugHint?: string;
-  count: number;
-  items: PlanningPackItem[];
-  onExpand: (item: PlanningPackItem) => void;
-  renderMarkdown: (md: string) => string;
-  stripForPreview: (raw: string) => string;
+  node: TreeDirNode;
+  depth: number;
+  onDownloadItems: (itemsToDownload: PlanningPackItem[], label: string) => void;
+  onOpenContextMenu: (
+    event: React.MouseEvent,
+    title: string,
+    actions: ContextMenuAction[],
+  ) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(depth < 1);
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border/70 bg-dark/40">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-white/[0.04]"
-        aria-expanded={open}
-      >
-        <ChevronDown
-          size={20}
-          className={`shrink-0 text-text-muted transition-transform ${open ? "rotate-180" : ""}`}
-          aria-hidden
-        />
-        <div className="min-w-0 flex-1">
-          <p className="font-display text-lg text-primary">{label}</p>
-          {slugHint ? (
-            <p className="truncate text-xs text-text-muted">
-              Section <code className="text-accent/90">{slugHint}</code> · {count} file{count === 1 ? "" : "s"}
-            </p>
-          ) : (
-            <p className="text-xs text-text-muted">
-              {count} file{count === 1 ? "" : "s"}
-            </p>
-          )}
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <div className="group">
+        <div
+          className="flex items-center gap-2 rounded-md"
+          style={{ paddingLeft: 6 + depth * 14 }}
+        >
+          <CollapsibleTrigger
+            type="button"
+            className="rp-tree-row flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1 text-left transition"
+            onContextMenu={(event) =>
+              onOpenContextMenu(event, node.name, [
+                {
+                  id: "download-folder",
+                  label: "Download folder as ZIP",
+                  onSelect: () => onDownloadItems(node.items, node.name),
+                },
+              ])
+            }
+          >
+            <ChevronDown
+              size={13}
+              className={cn("shrink-0 text-muted-foreground transition-transform", open && "rotate-180")}
+            />
+            {open ? (
+              <FolderOpen size={14} className="shrink-0 text-accent" />
+            ) : (
+              <Folder size={14} className="shrink-0 text-accent" />
+            )}
+            <span className="truncate text-[13px] text-foreground">{node.name}</span>
+          </CollapsibleTrigger>
+          <HoverDownloadButton
+            label={`Download ${node.name}`}
+            onClick={() => onDownloadItems(node.items, node.name)}
+          />
         </div>
-      </button>
-      {open ? (
-        <div className="border-t border-border/50 px-4 pb-5 pt-2">
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {items.map((item) => (
-              <PlanCard
-                key={item.id}
-                item={item}
-                onExpand={() => void onExpand(item)}
-                renderMarkdown={renderMarkdown}
-                stripForPreview={stripForPreview}
-              />
-            ))}
+        <CollapsibleContent>
+          <div className="ml-4 pl-1" style={{ borderLeft: "1px solid var(--rp-tree-divider)" }}>
+            <TreeNodes
+              nodes={node.children}
+              depth={depth + 1}
+              onDownloadItems={onDownloadItems}
+              onOpenContextMenu={onOpenContextMenu}
+            />
           </div>
-        </div>
+        </CollapsibleContent>
+      </div>
+    </Collapsible>
+  );
+}
+
+function TreeFile({
+  node,
+  depth,
+  onOpenContextMenu,
+}: {
+  node: TreeFileNode;
+  depth: number;
+  onOpenContextMenu: (
+    event: React.MouseEvent,
+    title: string,
+    actions: ContextMenuAction[],
+  ) => void;
+}) {
+  const { stem, ext } = splitFilename(node.name);
+  const tone = getFileTone(node.item);
+
+  return (
+    <div
+      className="group flex items-center gap-2 rounded-md"
+      style={{ paddingLeft: 6 + depth * 14 }}
+    >
+      <a
+        href={node.item.file}
+        download={node.item.filename}
+        className="rp-tree-row flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1 transition"
+        title={`Download ${node.item.filename}`}
+        onContextMenu={(event) =>
+          onOpenContextMenu(event, node.name, [
+            {
+              id: "download-file",
+              label: "Download file",
+              onSelect: () => triggerFileDownload(node.item),
+            },
+          ])
+        }
+      >
+        <span
+          className="inline-flex shrink-0 items-center justify-center rounded-md p-1"
+          style={{
+            backgroundColor: tone.iconBackground,
+            color: tone.iconText,
+            boxShadow: `inset 0 0 0 1px ${tone.iconBorder}`,
+          }}
+        >
+          <FileText size={12} />
+        </span>
+        <span className="min-w-0 flex-1 truncate text-[13px] leading-tight text-foreground">
+          <span>{stem}</span>
+          {ext ? <span style={{ color: tone.extensionText }}>{ext}</span> : null}
+        </span>
+      </a>
+
+      {node.item.sizeBytes ? (
+        <span
+          className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-foreground"
+          style={SIZE_CHIP_STYLE}
+        >
+          {formatBytes(node.item.sizeBytes)}
+        </span>
       ) : null}
+
+      <HoverDownloadButton label={`Download ${node.item.filename}`} href={node.item.file} download={node.item.filename} />
     </div>
   );
 }
 
-function TabBtn({
-  active,
+function HoverDownloadButton({
+  label,
   onClick,
-  children,
+  href,
+  download,
 }: {
-  active: boolean;
-  onClick: () => void;
-  children: ReactNode;
+  label: string;
+  onClick?: () => void;
+  href?: string;
+  download?: string;
 }) {
+  const className = cn(
+    buttonVariants({ variant: "ghost", size: "icon-xs" }),
+    "rounded-md text-muted-foreground opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100 hover:text-foreground",
+  );
+
+  if (href) {
+    return (
+      <a
+        href={href}
+        download={download}
+        aria-label={label}
+        title={label}
+        className={className}
+        style={HOVER_ACTION_STYLE}
+      >
+        <Download size={13} />
+      </a>
+    );
+  }
+
   return (
     <button
       type="button"
+      aria-label={label}
+      title={label}
+      className={className}
+      style={HOVER_ACTION_STYLE}
       onClick={onClick}
-      className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-        active ? "bg-primary text-secondary" : "text-text-muted hover:text-primary"
-      }`}
     >
-      {children}
+      <Download size={13} />
     </button>
   );
 }
 
-function PlanCard({
-  item,
-  onExpand,
-  renderMarkdown,
-  stripForPreview,
-}: {
-  item: PlanningPackItem;
-  onExpand: () => void;
-  renderMarkdown: (md: string) => string;
-  stripForPreview: (raw: string) => string;
-}) {
-  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
+function buildSectionTree(items: PlanningPackItem[], slugHint?: string): TreeNode[] {
+  type DirBuilder = {
+    key: string;
+    name: string;
+    dirs: Map<string, DirBuilder>;
+    files: TreeFileNode[];
+  };
 
-  useEffect(() => {
-    let cancelled = false;
+  const root: DirBuilder = {
+    key: "root",
+    name: "",
+    dirs: new Map(),
+    files: [],
+  };
 
-    fetch(item.file)
-      .then((r) => {
-        if (!r.ok) throw new Error("fetch failed");
-        return r.text();
-      })
-      .then((text) => {
-        if (cancelled) return;
-        const body = stripForPreview(text);
-        const slice = body.slice(0, PREVIEW_CHAR_CAP);
-        const html = renderMarkdown(slice);
-        setPreviewHtml(html);
-      })
-      .catch(() => {
-        if (!cancelled) setFailed(true);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+  for (const item of items) {
+    const relativePath = toRelativeTreePath(item, slugHint);
+    const segments = relativePath.split("/").filter(Boolean);
+    const fallbackName = item.filename;
+    const fileName = segments.pop() ?? fallbackName;
+    let current = root;
+    let currentKey = "";
+
+    for (const segment of segments) {
+      currentKey = currentKey ? `${currentKey}/${segment}` : segment;
+      let nextDir = current.dirs.get(segment);
+      if (!nextDir) {
+        nextDir = {
+          key: currentKey,
+          name: segment,
+          dirs: new Map(),
+          files: [],
+        };
+        current.dirs.set(segment, nextDir);
+      }
+      current = nextDir;
+    }
+
+    current.files.push({
+      kind: "file",
+      key: `${current.key}/${fileName}:${item.id}`,
+      name: fileName,
+      item,
+    });
+  }
+
+  function finalize(builder: DirBuilder): TreeNode[] {
+    const dirs = [...builder.dirs.values()]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((dir) => {
+        const children = finalize(dir);
+        return {
+          kind: "dir" as const,
+          key: dir.key,
+          name: dir.name,
+          children,
+          items: flattenNodeItems(children),
+        };
       });
 
-    return () => {
-      cancelled = true;
-    };
-  }, [item.file, renderMarkdown, stripForPreview]);
+    const files = [...builder.files].sort((a, b) => a.name.localeCompare(b.name));
+    return [...dirs, ...files];
+  }
 
-  return (
-    <div className="group relative flex flex-col">
-      <div className="relative aspect-[3/4] overflow-hidden rounded-lg border border-border/80 bg-gradient-to-br from-[#161618] via-dark-alt to-zinc-950 shadow-inner">
-        <div className="absolute left-0 top-0 h-full w-1 bg-red-700/90" aria-hidden />
+  return finalize(root);
+}
 
-        <div className="absolute inset-0 bottom-[4.5rem] overflow-hidden">
-          {loading ? (
-            <div className="flex h-full flex-col gap-2 p-3 pt-4">
-              <div className="h-2 w-3/4 animate-pulse rounded bg-white/10" />
-              <div className="h-2 w-full animate-pulse rounded bg-white/10" />
-              <div className="h-2 w-5/6 animate-pulse rounded bg-white/10" />
-              <div className="mt-4 h-2 w-full animate-pulse rounded bg-white/10" />
-              <div className="h-2 w-11/12 animate-pulse rounded bg-white/10" />
-            </div>
-          ) : failed || !previewHtml ? (
-            <div className="flex h-full items-center justify-center p-4 text-center text-xs text-text-muted">
-              Preview unavailable
-            </div>
-          ) : (
-            <>
-              <div
-                className="pointer-events-none absolute left-0 top-0 origin-top-left text-[13px] leading-snug"
-                style={{
-                  width: "min(420px, 135%)",
-                  transform: "scale(0.38)",
-                  transformOrigin: "top left",
-                }}
-              >
-                <div
-                  className="prose prose-invert max-w-none px-3 pt-3 prose-headings:my-1 prose-headings:text-[0.95rem] prose-headings:font-semibold prose-headings:text-primary prose-p:my-1 prose-p:text-text/90 prose-li:my-0 prose-li:text-text/90 prose-table:text-[11px] prose-th:px-1 prose-td:px-1 prose-code:text-[10px] prose-pre:text-[10px] prose-a:text-accent/90 prose-a:no-underline"
-                  dangerouslySetInnerHTML={{ __html: previewHtml }}
-                />
-              </div>
-              <div
-                className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-[#121214] via-[#121214]/85 to-transparent"
-                aria-hidden
-              />
-            </>
-          )}
-        </div>
+function flattenNodeItems(nodes: TreeNode[]): PlanningPackItem[] {
+  return nodes.flatMap((node) => (node.kind === "file" ? [node.item] : node.items));
+}
 
-        <div className="absolute inset-x-0 bottom-0 border-t border-white/10 bg-[#121214]/95 px-3 py-2.5 backdrop-blur-sm">
-          <p className="line-clamp-2 font-medium leading-snug text-primary">{item.title}</p>
-          <p className="mt-0.5 truncate text-xs text-text-muted">{item.filename}</p>
-        </div>
+function toRelativeTreePath(item: PlanningPackItem, slugHint?: string) {
+  const archivePath = resolveArchivePath(item);
+  const segments = archivePath.split("/").filter(Boolean);
 
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-4 bg-black/0 opacity-0 transition group-hover:pointer-events-auto group-hover:bg-black/55 group-hover:opacity-100">
-          <a
-            href={item.file}
-            download={item.filename}
-            className="pointer-events-auto inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/30 bg-dark/90 text-primary shadow-lg backdrop-blur hover:border-accent hover:bg-dark"
-            title="Download"
-            aria-label={`Download ${item.filename}`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Download size={22} />
-          </a>
-          <button
-            type="button"
-            onClick={onExpand}
-            className="pointer-events-auto inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/30 bg-dark/90 text-primary shadow-lg backdrop-blur hover:border-accent hover:bg-dark"
-            title="Read"
-            aria-label={`Read ${item.title}`}
-          >
-            <Expand size={22} />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+  if (slugHint && segments[0]?.toLowerCase() === slugHint.toLowerCase()) {
+    segments.shift();
+  }
+
+  return segments.join("/") || item.filename;
+}
+
+function resolveArchivePath(item: PlanningPackItem) {
+  if (item.archivePath && item.archivePath.trim()) return item.archivePath;
+  if (item.slug && item.slug.trim()) return item.slug;
+  return item.filename;
+}
+
+function splitFilename(filename: string) {
+  const match = /^(.+?)(\.[^.]+)?$/.exec(filename.trim());
+  return {
+    stem: match?.[1] ?? filename,
+    ext: match?.[2] ?? "",
+  };
+}
+
+function dedupeArchivePath(candidate: string, usedPaths: Map<string, number>) {
+  const normalized = candidate.replace(/^\/+/, "");
+  const currentCount = usedPaths.get(normalized) ?? 0;
+  usedPaths.set(normalized, currentCount + 1);
+
+  if (currentCount === 0) {
+    return normalized;
+  }
+
+  const lastDotIndex = normalized.lastIndexOf(".");
+  if (lastDotIndex <= 0) {
+    return `${normalized}-${currentCount + 1}`;
+  }
+
+  const stem = normalized.slice(0, lastDotIndex);
+  const ext = normalized.slice(lastDotIndex);
+  return `${stem}-${currentCount + 1}${ext}`;
+}
+
+function triggerBlobDownload(blob: Blob, filename: string) {
+  const downloadUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = downloadUrl;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(downloadUrl);
+}
+
+function triggerFileDownload(item: PlanningPackItem) {
+  const anchor = document.createElement("a");
+  anchor.href = item.file;
+  anchor.download = item.filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+}
+
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-");
+}
+
+function getFileTone(item: PlanningPackItem): FileTone {
+  const extension = item.filename.split(".").pop()?.toLowerCase() ?? "";
+  const accent = resolveAccent(extension);
+
+  return {
+    iconBackground: `color-mix(in oklch, ${accent} 10%, var(--card))`,
+    iconBorder: `color-mix(in oklch, ${accent} 26%, transparent)`,
+    iconText: `color-mix(in oklch, ${accent} 72%, white 28%)`,
+    extensionText: `color-mix(in oklch, ${accent} 80%, white 20%)`,
+  };
+}
+
+function resolveAccent(extension: string) {
+  switch (extension) {
+    case "xml":
+      return "var(--rp-file-xml)";
+    case "mdx":
+      return "var(--rp-file-mdx)";
+    case "md":
+      return "var(--rp-file-md)";
+    case "toml":
+      return "var(--rp-file-toml)";
+    case "json":
+      return "var(--rp-file-json)";
+    case "txt":
+      return "var(--rp-file-txt)";
+    default:
+      return "var(--rp-file-default)";
+  }
+}
+
+function formatSectionMeta(items: PlanningPackItem[], slugHint?: string) {
+  const totalBytes = items.reduce((sum, item) => sum + (item.sizeBytes ?? 0), 0);
+  const parts = [
+    slugHint ? `section ${slugHint}` : null,
+    `${items.length} file${items.length === 1 ? "" : "s"}`,
+    totalBytes > 0 ? formatBytes(totalBytes) : null,
+  ].filter(Boolean);
+  return parts.join(" | ");
+}
+
+function formatBytes(value: number) {
+  if (value < 1024) return `${value} B`;
+  const kilobytes = value / 1024;
+  if (kilobytes < 1024) return `${kilobytes.toFixed(kilobytes >= 100 ? 0 : 1)} KB`;
+  const megabytes = kilobytes / 1024;
+  return `${megabytes.toFixed(megabytes >= 100 ? 0 : 1)} MB`;
 }
