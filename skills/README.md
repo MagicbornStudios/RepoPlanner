@@ -6,50 +6,61 @@ Six agent skills that give Claude the full RepoPlanner planning loop — from pr
 
 ```
 rp-new-project → rp-plan-phase → rp-execute-phase → rp-verify-work
-                      ↑                                     |
-                 rp-check-todos ←─────────────────────────┘
+      ↑                ↑                                     |
+ rp-milestone    rp-add-todo                          rp-check-todos
+                 rp-quick                                    |
+                 rp-debug ←──── (when things break) ────────┘
 ```
 
-`rp-check-todos` is the re-entry point. Call it anytime to orient, including after a context reset.
+`rp-check-todos` is the re-entry point after any context reset. `rp-session` is the bridge when pausing mid-phase.
 
-## Install
+## Install all 12
 
 ```bash
-# Core methodology (required — install this first)
 npx skills add MagicbornStudios/RepoPlanner/skills/repo-planner
-
-# Full loop
 npx skills add MagicbornStudios/RepoPlanner/skills/rp-new-project
 npx skills add MagicbornStudios/RepoPlanner/skills/rp-plan-phase
 npx skills add MagicbornStudios/RepoPlanner/skills/rp-execute-phase
 npx skills add MagicbornStudios/RepoPlanner/skills/rp-verify-work
 npx skills add MagicbornStudios/RepoPlanner/skills/rp-check-todos
+npx skills add MagicbornStudios/RepoPlanner/skills/rp-debug
+npx skills add MagicbornStudios/RepoPlanner/skills/rp-map-codebase
+npx skills add MagicbornStudios/RepoPlanner/skills/rp-session
+npx skills add MagicbornStudios/RepoPlanner/skills/rp-milestone
+npx skills add MagicbornStudios/RepoPlanner/skills/rp-add-todo
+npx skills add MagicbornStudios/RepoPlanner/skills/rp-quick
 ```
 
 ## Skills
 
-| Skill | When to use | Install |
-|-------|-------------|---------|
-| `repo-planner` | Core methodology — always install first | `MagicbornStudios/RepoPlanner/skills/repo-planner` |
-| `rp-new-project` | Initialize a new project with full planning structure | `MagicbornStudios/RepoPlanner/skills/rp-new-project` |
-| `rp-plan-phase` | Plan a phase: kickoff + task list | `MagicbornStudios/RepoPlanner/skills/rp-plan-phase` |
-| `rp-execute-phase` | Execute a planned phase atomically to completion | `MagicbornStudios/RepoPlanner/skills/rp-execute-phase` |
-| `rp-verify-work` | Verify a phase achieved its goals before closing | `MagicbornStudios/RepoPlanner/skills/rp-verify-work` |
-| `rp-check-todos` | Find the single best next action from current state | `MagicbornStudios/RepoPlanner/skills/rp-check-todos` |
-
-## Why 6 and no more
-
-Each skill owns exactly one step in the loop. More skills would dilute triggering accuracy and create overlap. The `repo-planner` methodology skill provides the context that makes the other five work — install it first.
+| Skill | When to use |
+|-------|-------------|
+| `repo-planner` | **Install first.** Core methodology, planning root discovery, 3 file formats, monorepo layers |
+| `rp-new-project` | Initialize a new project — requirements, roadmap, state |
+| `rp-plan-phase` | Plan a phase — kickoff contract + task list before execution |
+| `rp-execute-phase` | Execute a phase atomically, task by task, with commits |
+| `rp-verify-work` | Verify a phase hit its goals before closing |
+| `rp-check-todos` | Find the best next action — re-entry after any context reset |
+| `rp-debug` | Systematic debugging — hypothesis tracking, persistent session |
+| `rp-map-codebase` | Analyze existing code — produces STACK, ARCH, CONVENTIONS, CONCERNS |
+| `rp-session` | Pause/resume mid-phase — bridges context resets in the autonomous loop |
+| `rp-milestone` | Audit milestone completeness, close it (archive + tag), start the next |
+| `rp-add-todo` | Capture an idea mid-session without losing flow |
+| `rp-quick` | Fast-path for ad-hoc tasks that don't belong in the roadmap |
 
 ## Autonomous execution
 
-These skills are designed to support uninterrupted execution. With a well-planned project:
+With a fully planned project, an autonomous agent can loop without interruption:
 
-1. Run `rp-new-project` once to set up requirements and roadmap
-2. Run `rp-plan-phase` for each phase to create kickoffs and task lists
-3. Hand off to an autonomous agent that loops: `rp-check-todos` → `rp-execute-phase` → `rp-verify-work` → repeat
+1. `rp-map-codebase` once for brownfield repos
+2. `rp-new-project` to define requirements and roadmap
+3. For each phase: `rp-plan-phase` → `rp-execute-phase` → `rp-verify-work`
+4. `rp-check-todos` at any re-entry point
+5. `rp-session` to bridge context resets mid-phase
+6. `rp-debug` when anything breaks
+7. `rp-milestone` when all phases are done and the cycle closes
 
-The planning docs act as shared memory across context resets — the agent always knows where it is.
+The planning docs are the shared memory. Even after a full context reset, any skill can re-orient from the files alone.
 
 ## About RepoPlanner
 
