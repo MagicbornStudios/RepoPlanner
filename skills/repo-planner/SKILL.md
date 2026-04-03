@@ -215,6 +215,32 @@ When a phase closes, promote any durable knowledge out of the plan:
 - Scope changes → `requirements.md`
 - Phase status → `roadmap.md`
 
+## Vendor directories
+
+Every `vendor/` submodule is expected to have its own `.planning/` — if it's vendored, there should be a plan for it. Use the following rules when working in a repo that has a `vendor/` directory:
+
+**If a vendor has no `.planning/`:** create and init one:
+```bash
+mkdir -p vendor/<slug>/.planning
+# write a minimal STATE.md or STATE.xml describing the integration goal
+```
+Don't `.gitignore` vendor `.planning/` directories — the goal is adoption of the planning loop across every active dependency.
+
+**If a vendor already has its own `.planning/`:** its planning root governs section-specific work. The monorepo root `.planning/` stays authoritative for cross-cutting concerns. Incorporate the vendor's existing planning as a reference:
+- Add an entry for the vendor in the monorepo's `requirements` or `roadmap` that points at its planning root
+- Mirror or snapshot key decisions that affect the monorepo in the monorepo's `decisions` doc (a pointer, not a copy)
+- Never let two authoritative sources conflict silently — note divergences in `errors-and-attempts`
+
+**Vendor → section mapping:** every vendor maps to either its own section (e.g. `docs/vendor-slug/planning/`) or an existing section it belongs to. If no section owns it yet, create a stub section. The mapping lives in the monorepo's `requirements` doc.
+
+**ID namespace:** vendor phases follow the same pattern as any section — the namespace is the vendor's folder name or its section name (e.g. `grime-time`, `repo-planner`, `mb-cli-framework`).
+
+**Quick check:**
+```bash
+# find vendor dirs without .planning
+for d in vendor/*/; do [ -d "$d/.planning" ] || echo "NO PLANNING: $d"; done
+```
+
 ## External reference writes
 
 Sometimes execution produces documentation that doesn't fit the 5-doc loop or a plan artifact (e.g. an API reference, a runbook, a data contract, architecture diagrams).
