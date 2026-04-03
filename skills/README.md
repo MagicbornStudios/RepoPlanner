@@ -14,7 +14,7 @@ rp-new-project → rp-plan-phase → rp-execute-phase → rp-verify-work
 
 `rp-check-todos` is the re-entry point after any context reset. `rp-session` is the bridge when pausing mid-phase.
 
-## Install all 12
+## Install all 13
 
 ```bash
 npx skills add MagicbornStudios/RepoPlanner/skills/repo-planner
@@ -29,6 +29,7 @@ npx skills add MagicbornStudios/RepoPlanner/skills/rp-session
 npx skills add MagicbornStudios/RepoPlanner/skills/rp-milestone
 npx skills add MagicbornStudios/RepoPlanner/skills/rp-add-todo
 npx skills add MagicbornStudios/RepoPlanner/skills/rp-quick
+npx skills add MagicbornStudios/RepoPlanner/skills/rp-manuscript
 ```
 
 ## Skills
@@ -47,6 +48,7 @@ npx skills add MagicbornStudios/RepoPlanner/skills/rp-quick
 | `rp-milestone` | Audit milestone completeness, close it (archive + tag), start the next |
 | `rp-add-todo` | Capture an idea mid-session without losing flow |
 | `rp-quick` | Fast-path for ad-hoc tasks that don't belong in the roadmap |
+| `rp-manuscript` | Fiction/creative writing adaptation — manuscript loop, beat sheets, canon locks, chapter done checklist |
 
 ## Autonomous execution
 
