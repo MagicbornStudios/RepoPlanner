@@ -3,6 +3,8 @@ name: rp-verify-work
 description: Verify that a completed phase actually achieved its goals — checks each definition-of-done criterion, runs verification commands, and produces a clear pass/fail report. Use this skill after executing a phase, when the user wants to confirm a feature is truly done, when closing a phase, or when checking whether all requirements were met. If gaps are found, surfaces exactly what's missing so the next execution can close them. Pairs with rp-execute-phase.
 ---
 
+> **Deprecated:** Use `gad:verify-work` instead. This skill remains for backwards compatibility but `gad:` is the preferred prefix.
+
 # Verify Work
 
 Verifies a completed phase against its definition-of-done. Goal-backward: start from what the phase promised, check whether the code delivers it.

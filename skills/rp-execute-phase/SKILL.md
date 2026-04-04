@@ -3,6 +3,8 @@ name: rp-execute-phase
 description: Execute a planned phase by following PLAN.md tasks atomically — commit after each task, update planning docs, and run verify commands at each step. Use this skill when the user wants to execute a phase, start working on planned tasks, run through a phase autonomously, or continue execution of an in-progress phase. This is the autonomous execution skill — if the plan is solid and requirements are clear, Claude should be able to run this to completion without interruption. Requires rp-plan-phase to have been run first to produce a PLAN.md.
 ---
 
+> **Deprecated:** Use `gad:execute-phase` instead. This skill remains for backwards compatibility but `gad:` is the preferred prefix.
+
 # Execute Phase
 
 Execute all tasks in a planned phase, following PLAN.md atomically. Each task is a discrete unit: implement → verify → commit → update planning docs → next task.

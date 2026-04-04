@@ -3,6 +3,8 @@ name: rp-debug
 description: Systematic debugging using the scientific method — form hypotheses, test them, eliminate dead ends, and find root causes. Use this skill whenever the user reports a bug, unexpected behavior, test failure, build error, or anything that "should work but doesn't." Also use it when execution hits an unexpected blocker mid-phase, when a verification command produces confusing output, or when multiple debugging attempts have failed and you need a structured approach. Maintains a persistent debug session file so investigation survives context resets.
 ---
 
+> **Deprecated:** Use `gad:debug` instead. This skill remains for backwards compatibility but `gad:` is the preferred prefix.
+
 # Debug
 
 Systematic debugging using the scientific method. Investigation burns context fast — this skill keeps the process structured and the findings durable across context resets.

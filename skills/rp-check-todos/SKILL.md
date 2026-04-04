@@ -3,6 +3,8 @@ name: rp-check-todos
 description: Read current planning state and surface the single best next task or action — the re-entry point for any autonomous loop. Use this skill when the user asks "what should I work on next?", "what's the status?", "where are we?", "what's next?", or starts a new session and needs to orient. Also use it to find the next task after completing one, or to decide whether to plan a new phase or execute an existing one. This is the navigation skill — run it between every phase and after any context reset.
 ---
 
+> **Deprecated:** Use `gad:check-todos` instead. This skill remains for backwards compatibility but `gad:` is the preferred prefix.
+
 # Check Todos
 
 Reads planning state and surfaces the single best next action. This is the re-entry skill for any execution loop — run it whenever you need to orient or after any context reset.

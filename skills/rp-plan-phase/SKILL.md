@@ -3,6 +3,8 @@ name: rp-plan-phase
 description: Plan a phase using the RepoPlanner methodology — creates a KICKOFF.md with goal/scope/DoD and a PLAN.md with concrete tasks. Use this skill when the user wants to plan the next phase, start planning a feature or milestone, create a task list for a phase, run a kickoff before implementation, or see what tasks are needed to achieve a phase goal. Also use it when a phase exists in the roadmap but has no tasks yet, or when a phase has been idle and assumptions may be stale. Requires repo-planner skill for the full methodology context.
 ---
 
+> **Deprecated:** Use `gad:plan-phase` instead. This skill remains for backwards compatibility but `gad:` is the preferred prefix.
+
 # Plan a Phase
 
 Creates a KICKOFF.md (phase contract) and PLAN.md (task list) for a phase from the roadmap. The kickoff prevents vague phases from producing wrong implementations. The plan breaks the goal into concrete, verifiable tasks.

@@ -3,6 +3,8 @@ name: rp-quick
 description: Execute a quick ad-hoc task with planning guarantees (atomic commit, STATE update) but without the full phase ceremony — no kickoff, no research, no plan-checker. Use this skill for small fixes, chores, hotfixes, dependency updates, documentation patches, or any self-contained task that doesn't belong in the roadmap and can be clearly described in one sentence. Also use it when the user says "quick fix", "just change X", "can you update Y", or describes a task that's clearly scoped and under ~30 minutes. Keeps the task registry and roadmap clean by handling ad-hoc work in a separate lane.
 ---
 
+> **Deprecated:** Use `gad:quick` instead. This skill remains for backwards compatibility but `gad:` is the preferred prefix.
+
 # Quick Task
 
 Fast path for self-contained ad-hoc work. Same guarantees as `rp-execute-phase` (atomic commit, state update, verify) without the phase scaffolding. Lives in `.planning/quick/` — separate from the roadmap so the milestone stays clean.

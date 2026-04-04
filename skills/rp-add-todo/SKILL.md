@@ -3,6 +3,8 @@ name: rp-add-todo
 description: Capture an idea, task, or follow-up from the current conversation without losing flow — writes it to .planning/todos/ and updates STATE.md. Use this skill when the user mentions something they want to remember ("we should also...", "don't forget...", "add to the list..."), when execution uncovers work that doesn't belong in the current phase, when a decision surfaces a follow-up task, or when an idea comes up mid-session that shouldn't be forgotten but shouldn't derail the current work. Keeps ideas captured without derailing execution.
 ---
 
+> **Deprecated:** Use `gad:add-todo` instead. This skill remains for backwards compatibility but `gad:` is the preferred prefix.
+
 # Add Todo
 
 Captures an idea or task without derailing the current work. The goal is "thought → captured → continue" in under 10 seconds. The todo lands in `.planning/todos/` where `rp-check-todos` can surface it later.

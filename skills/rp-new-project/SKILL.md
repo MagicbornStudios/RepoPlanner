@@ -3,6 +3,8 @@ name: rp-new-project
 description: Initialize a new project or new section with the RepoPlanner planning structure. Use this skill when the user wants to start a new project, set up planning docs for a repo that doesn't have them yet, add a new section to a monorepo, or scaffold requirements/roadmap/state/task-registry. Creates the full .planning/ structure and 5-doc loop, asks the right questions about scope and goals, generates requirements with stable IDs, and produces a phased roadmap. Works for simple repos and monorepos.
 ---
 
+> **Deprecated:** Use `gad:new-project` instead. This skill remains for backwards compatibility but `gad:` is the preferred prefix.
+
 # New Project Init
 
 Sets up the full RepoPlanner planning structure for a new project or new monorepo section. The goal is a system where both agents and humans always know exactly what to work on next.

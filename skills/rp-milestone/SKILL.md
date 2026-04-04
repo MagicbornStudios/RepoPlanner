@@ -3,6 +3,8 @@ name: rp-milestone
 description: Manage the full milestone lifecycle — start a new milestone (new version, new cycle), audit a completed one for gaps before archiving, and close it out with git tag and state reset. Use this skill when the user says "we're starting v2", "let's kick off the next release", "we finished everything in this milestone, what's next", "archive this milestone", or wants to review whether all planned work is actually done before closing. Also use it when all phases in the roadmap are marked done and you need to decide whether to start fresh planning or close out. Covers gsd:new-milestone + gsd:complete-milestone + gsd:audit-milestone.
 ---
 
+> **Deprecated:** Use `gad:audit-milestone / gad:new-milestone / gad:complete-milestone` instead. This skill remains for backwards compatibility but `gad:` is the preferred prefix.
+
 # Milestone Lifecycle
 
 Manages milestone boundaries — the transitions between "shipping v1" and "starting v2". A milestone is a named set of phases that ship together. Closing one cleanly and starting the next is what keeps planning from accumulating drift.
