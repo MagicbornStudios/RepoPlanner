@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<requirements>
+  <!-- Requirements for repo-planner project.
+       repo-planner is a React planning cockpit package embedded in the portfolio.
+       Requirements are described in ROADMAP.xml goals and the portfolio docs sink. -->
+</requirements>

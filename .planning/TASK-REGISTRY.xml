@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<task-registry>
+  <!-- Phase 01–06 tasks are complete. Phase 07 (GAD migration) tasks below. -->
+  <phase id="07">
+    <task id="07-01" agent-id="" status="planned">
+      <goal>Migrate rp-* skills from vendor/repo-planner/skills/ to vendor/get-anything-done/skills/ with gad: naming prefix.</goal>
+      <keywords>skills,migration,gad</keywords>
+      <commands>
+        <command>ls vendor/repo-planner/skills/</command>
+        <command>ls vendor/get-anything-done/skills/</command>
+      </commands>
+    </task>
+    <task id="07-02" agent-id="" status="planned">
+      <goal>Create deprecation stubs in vendor/repo-planner/skills/ pointing to new gad: skill locations.</goal>
+      <keywords>skills,deprecation,stubs</keywords>
+      <commands>
+        <command># each stub: echo "Deprecated. Use: gad:&lt;name&gt;" in SKILL.md</command>
+      </commands>
+    </task>
+    <task id="07-03" agent-id="" status="planned">
+      <goal>Remove legacy session.md pattern; repo-planner now uses gad session commands.</goal>
+      <keywords>session,migration,cleanup</keywords>
+      <commands>
+        <command>gad session list --projectid repo-planner</command>
+      </commands>
+    </task>
+    <task id="07-04" agent-id="" status="planned">
+      <goal>Update AGENTS.md to reference XML planning files and gad: commands exclusively.</goal>
+      <keywords>agents,documentation</keywords>
+      <commands>
+        <command>cat vendor/repo-planner/.planning/AGENTS.md</command>
+      </commands>
+    </task>
+  </phase>
+</task-registry>

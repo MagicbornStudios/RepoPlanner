@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<errors-and-attempts>
+  <!-- Error log for repo-planner. Format: <attempt id phase task status> with title/symptom/cause/attempted-fix/verification/command -->
+</errors-and-attempts>

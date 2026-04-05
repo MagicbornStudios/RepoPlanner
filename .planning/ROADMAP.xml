@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<roadmap>
+  <phase id="01">
+    <title>Portfolio integration baseline</title>
+    <goal>Monorepo alignment, CLI docs, embed boundaries, preview uploads, route-installer cleanup.</goal>
+    <depends></depends>
+    <status>complete</status>
+  </phase>
+  <phase id="02">
+    <title>Package host contract</title>
+    <goal>Cleaner package-level host contract for other apps to import.</goal>
+    <depends>01</depends>
+    <status>complete</status>
+  </phase>
+  <phase id="03">
+    <title>Live cockpit</title>
+    <goal>Real cockpit body, Pack vs Live modes, shared bundle plumbing, dashboard chrome.</goal>
+    <depends>02</depends>
+    <status>complete</status>
+  </phase>
+  <phase id="04">
+    <title>Built-in planning-pack generation</title>
+    <goal>Builtin-packs.json from package-owned gallery components.</goal>
+    <depends>03</depends>
+    <status>complete</status>
+  </phase>
+  <phase id="05">
+    <title>Workflow loop</title>
+    <goal>Sprint-aware snapshot scoring, kickoff scaffolding, done gates, ownership guidance.</goal>
+    <depends>04</depends>
+    <status>complete</status>
+  </phase>
+  <phase id="06">
+    <title>Structured cockpit views</title>
+    <goal>Form-based editing, badges, icons, autosave, immutable ids, host policy controls.</goal>
+    <depends>05</depends>
+    <status>complete</status>
+  </phase>
+  <phase id="07">
+    <title>GAD migration</title>
+    <goal>Replace rp-* skills with gad: equivalents, init project under GAD framework, remove legacy session.md pattern.</goal>
+    <depends>06</depends>
+    <status>active</status>
+  </phase>
+</roadmap>

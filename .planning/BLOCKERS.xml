@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<blockers>
+  <!-- Active blockers for repo-planner. Format: <blocker id status> with title/summary/task-ref -->
+</blockers>

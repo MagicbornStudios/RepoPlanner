@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<state>
+  <current-phase>07</current-phase>
+  <current-plan></current-plan>
+  <milestone>gad-migration-01</milestone>
+  <status>active</status>
+  <next-action>Migrate `vendor/repo-planner/skills/rp-*` into `vendor/get-anything-done/skills/` with `gad:` naming. Create deprecation stubs pointing to new locations. Document skill mapping.</next-action>
+  <last-updated>2026-04-04</last-updated>
+  <!-- Migrated from STATE.md on 2026-04-05. Canonical human-readable versions live in the sink at:
+       apps/portfolio/content/docs/repo-planner/planning/
+       This STATE.xml is the machine-authoritative source. -->
+  <sink-compiled sink="apps/portfolio/content/docs/repo-planner/planning/" at="2026-04-05T16:30:16.585Z" />
+</state>
