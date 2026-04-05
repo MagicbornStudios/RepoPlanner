@@ -1,35 +1,52 @@
 # Agent guide — repo-planner
 
-This project is managed under the **GAD framework**. Use `gad` CLI for context, state, and task queries.
+This project is managed under the **GAD framework**. Use `gad` CLI for all planning context.
 
-## Context re-hydration (after auto-compact)
+## Context re-hydration
 
 ```sh
-gad session list
-gad context --session <id> --json
+gad state --projectid repo-planner
+gad tasks --projectid repo-planner
+gad decisions --projectid repo-planner
 ```
 
-Load the returned refs, then continue. Never stop for context limits.
+Or full snapshot:
+```sh
+gad snapshot --projectid repo-planner
+```
 
-## Planning
+## Planning loop
 
-| File | Role |
-|------|------|
-| `.planning/ROADMAP.md` | Phase checklist |
-| `.planning/STATE.md` | Current position and next action |
-| Docs sink | `apps/portfolio/content/docs/repo-planner/planning/` |
+1. `gad state --projectid repo-planner` — read current phase and next action
+2. Pick one planned task from `gad tasks --projectid repo-planner`
+3. Implement it
+4. Update `.planning/TASK-REGISTRY.xml` — mark task done
+5. Update `.planning/STATE.xml` — update next-action
+6. `gad sink sync` — propagate to docs sink
+7. Commit
+
+## Planning files
+
+| File | Purpose |
+|------|---------|
+| `.planning/STATE.xml` | Current phase, milestone, status, next-action |
+| `.planning/ROADMAP.xml` | Phase breakdown (MD fallback: ROADMAP.md) |
+| `.planning/TASK-REGISTRY.xml` | All tasks by phase with status |
+| `.planning/DECISIONS.xml` | Architectural decisions |
 
 ## Docs sink
 
-The portfolio docs at `apps/portfolio/content/docs/repo-planner/planning/` are the **canonical human-readable planning record** for this project. Keep them in sync when phase status or state changes.
+Planning docs compile to: `apps/portfolio/content/docs/repo-planner/planning/`
+
+```sh
+gad sink sync                               # compile all projects
+gad sink status --projectid repo-planner    # check sync state
+```
 
 ## Skills
 
 `rp-*` skills in `vendor/repo-planner/skills/` are **deprecated**. Use `gad:*` equivalents in `vendor/get-anything-done/skills/`.
 
-## Loop
+## Current work
 
-1. Read STATE.md → pick one task from current phase
-2. Implement → verify (run lint/typecheck/tests as appropriate)
-3. Mark task done → update STATE.md → commit
-4. Update docs sink if phase status changed
+Phase 07 (gad-migration-01) — active. Run `gad tasks --projectid repo-planner` for open tasks.

@@ -24,7 +24,7 @@
         <command>gad session list --projectid repo-planner</command>
       </commands>
     </task>
-    <task id="07-04" agent-id="" status="planned">
+    <task id="07-04" agent-id="" status="done">
       <goal>Update AGENTS.md to reference XML planning files and gad: commands exclusively.</goal>
       <keywords>agents,documentation</keywords>
       <commands>
