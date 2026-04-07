@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<docs-map>
+  <doc kind="reference" sink="repo-planner/getting-started.mdx" skill="">
+    <description>RepoPlanner getting started guide — CLI usage, planning structure, loop walkthrough</description>
+  </doc>
+  <doc kind="reference" sink="repo-planner/requirements.mdx" skill="">
+    <description>RepoPlanner requirements narrative — monorepo-wide scope and planning methodology</description>
+  </doc>
+</docs-map>
