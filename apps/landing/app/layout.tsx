@@ -16,12 +16,12 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: "RepoPlanner — archived project",
+  title: "RepoPlanner — planning cockpit & CLI",
   description:
-    "What RepoPlanner was, why it paused, and where planning work continues — Get Anything Done and the GAD evaluation framework.",
+    "RepoPlanner: XML-first .planning/ artifacts, repo-planner CLI, and embeddable React surfaces. Reference implementation; active work continues in get-anything-done.",
   openGraph: {
     title: "RepoPlanner",
-    description: "Embeddable planning cockpit — archived; see Get Anything Done.",
+    description: "Planning cockpit, CLI, and .planning/ file model — archived reference.",
   },
 };
 
