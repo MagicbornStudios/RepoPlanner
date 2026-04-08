@@ -2,6 +2,10 @@
 
 Embeddable planning cockpit, parsing helpers, and CLI tooling for roadmap/state/task-registry workflows.
 
+## Public landing site
+
+A **single-page Next.js** explainer (Tailwind v4, shadcn-style primitives) lives in **`apps/landing`**. Deploy on [Vercel](https://vercel.com) with **Root Directory** set to `apps/landing` and Node 22+. See [`apps/landing/README.md`](./apps/landing/README.md).
+
 [INSTALL.md](./INSTALL.md) documents host integration details.
 
 ## What it does
