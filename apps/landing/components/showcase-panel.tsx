@@ -13,7 +13,7 @@ export function ShowcasePanel({
   children,
 }: {
   title: string;
-  description?: string;
+  description?: ReactNode;
   code: string;
   /** Shown in the code panel header */
   codeLabel?: string;
@@ -22,7 +22,9 @@ export function ShowcasePanel({
   return (
     <div className="rounded-2xl border border-[var(--border)] bg-[#141110]/50 p-5">
       <h3 className="font-display text-lg font-medium text-[var(--foreground)]">{title}</h3>
-      {description ? <p className="mt-2 text-sm text-[var(--muted-foreground)]">{description}</p> : null}
+      {description ? (
+        <div className="mt-2 text-sm text-[var(--muted-foreground)]">{description}</div>
+      ) : null}
       <Tabs defaultValue="preview" className="mt-4">
         <TabsList className="w-full justify-start sm:w-auto">
           <TabsTrigger value="preview">Preview</TabsTrigger>

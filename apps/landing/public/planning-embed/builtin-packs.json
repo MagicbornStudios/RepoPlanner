@@ -1,0 +1,45 @@
+{
+  "v": 1,
+  "generatedAt": "2026-04-08T23:31:25.412Z",
+  "packs": [
+    {
+      "id": "rp-builtin-init",
+      "label": "Demo init pack (.planning)",
+      "description": "Minimal XML + AGENTS.md + planning-config.toml for the RepoPlanner landing cockpit (read-only built-in).",
+      "files": [
+        {
+          "path": ".planning/planning-config.toml",
+          "content": "[planning]\nsprintSize = 5\ncurrentProfile = \"human\"\nconventionsPaths = [\"AGENTS.md\", \"REQUIREMENTS.md\", \".planning/AGENTS.md\"]\n\n[profiles.human]\ndescription = \"Default human view.\"\n\n[profiles.agent]\ndescription = \"Agent perspective; defaultJson = true.\"\ndefaultJson = true\n"
+        },
+        {
+          "path": ".planning/STATE.xml",
+          "content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<state>\n  <agent-registry />\n  <current-phase>01</current-phase>\n  <current-plan>bootstrap</current-plan>\n  <status>active</status>\n  <next-action>Edit REQUIREMENTS.md, .planning/ROADMAP.xml, TASK-REGISTRY.xml, and this file; read .planning/AGENTS.md. Pick one planned task, implement, update XML, commit.</next-action>\n  <references>\n    <reference>REQUIREMENTS.md</reference>\n    <reference>.planning/AGENTS.md</reference>\n    <reference>.planning/ROADMAP.xml</reference>\n    <reference>.planning/TASK-REGISTRY.xml</reference>\n    <reference>.planning/DECISIONS.xml</reference>\n  </references>\n  <agent-id-policy>\n    <format>agent-YYYYMMDD-xxxx</format>\n    <rule>Optional: register a unique id in STATE.xml before claiming tasks if you use CLI task-update.</rule>\n  </agent-id-policy>\n</state>\n"
+        },
+        {
+          "path": ".planning/TASK-REGISTRY.xml",
+          "content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<task-registry>\n  <phase id=\"01\">\n    <task id=\"01-01\" agent-id=\"\" status=\"planned\">\n      <goal>Replace stub REQUIREMENTS.md with real scope; align ROADMAP.xml and TASK-REGISTRY.xml with open work.</goal>\n      <keywords>bootstrap,requirements,roadmap,brownfield</keywords>\n      <commands>\n        <command>pnpm run lint</command>\n      </commands>\n      <depends></depends>\n    </task>\n  </phase>\n</task-registry>\n"
+        },
+        {
+          "path": ".planning/ROADMAP.xml",
+          "content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<roadmap>\n  <phase id=\"01\">\n    <goal>Keep repo-root REQUIREMENTS.md aligned with ROADMAP.xml, TASK-REGISTRY.xml, and STATE for agents and any RepoPlanner cockpit.</goal>\n    <status>active</status>\n    <depends></depends>\n  </phase>\n  <doc-flow>\n    <doc name=\"REQUIREMENTS.md\">Primary narrative PRD + cross-cutting checklist at repo root (not under .planning/).</doc>\n    <doc name=\".planning/ROADMAP.xml\">Phase timeline for RepoPlanner.</doc>\n    <doc name=\".planning/TASK-REGISTRY.xml\">Task graph and status.</doc>\n    <doc name=\".planning/AGENTS.md\">Planning playbook for agents (roadmap-first).</doc>\n  </doc-flow>\n</roadmap>\n"
+        },
+        {
+          "path": ".planning/DECISIONS.xml",
+          "content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<decisions>\n</decisions>\n"
+        },
+        {
+          "path": ".planning/ERRORS-AND-ATTEMPTS.xml",
+          "content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<errors-and-attempts />\n"
+        },
+        {
+          "path": ".planning/REQUIREMENTS.xml",
+          "content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<planning-references>\n  <doc>\n    <path>REQUIREMENTS.md</path>\n    <content><![CDATA[\n# Requirements (stub)\n\nEdit **REQUIREMENTS.md** at the repository root. This CDATA block is a bootstrap placeholder for tools that read REQUIREMENTS.xml only.\n]]></content>\n  </doc>\n</planning-references>\n"
+        },
+        {
+          "path": ".planning/AGENTS.md",
+          "content": "# Agent loop — skillless Ralph (brownfield only)\n\nThis is a **skillless** take on the **Ralph Wiggum loop**: the agent reads durable state from disk, does **one** concrete task, updates the XML/Markdown record, and commits. There is **no** skills framework here — no trigger files, no skill packs — only **files + optional CLI + optional cockpit** in a host app.\n\n## Scope\n\n**Brownfield only.** RepoPlanner assumes an existing codebase: real directories, tests, CI, and git history. It does **not** replace product discovery or greenfield scaffolding; it gives you a **thin, inspectable** planning layer on top of code that already exists.\n\n## Loop (every iteration)\n\n1. **Snapshot** — run your host’s planning CLI (`snapshot` / `checklist`) or open the cockpit so the current phase and next action are obvious.\n2. **Pick** — choose exactly one `planned` task in `TASK-REGISTRY.xml` (or split work until you can).\n3. **Implement** — touch the smallest surface that completes the task; run the listed verification commands.\n4. **Record** — update `STATE.xml`, task status, `DECISIONS.xml` if you changed approach, `ERRORS-AND-ATTEMPTS.xml` if something failed.\n5. **Commit** — one commit per task when possible (discipline for per-task traceability).\n\n## Where narrative lives\n\n- **REQUIREMENTS.md** (repo root) — long-form scope, roadmap tables, cross-cutting queue.\n- **.planning/*.xml** — machine-friendly timeline, tasks, state — the cockpit and CLI summarize these.\n\n## Optional CLI\n\nAdd a `package.json` script pointing at `repo-planner` / `loop-cli.mjs` if you want agents to run `snapshot` without opening the UI.\n"
+        }
+      ]
+    }
+  ]
+}

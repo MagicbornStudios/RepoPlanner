@@ -1,14 +1,14 @@
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
 import type { NextConfig } from "next";
+import path from "node:path";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-/** Nested under monorepo: trace files from this app only (silences wrong-root warning). */
 const nextConfig: NextConfig = {
-  reactStrictMode: true,
-  outputFileTracingRoot: path.join(__dirname),
+  transpilePackages: ["repo-planner"],
+  /** Resolve peer deps from the landing app when bundling the linked `repo-planner` package. */
+  webpack: (config) => {
+    const landingModules = path.resolve(process.cwd(), "node_modules");
+    config.resolve.modules = [landingModules, ...(config.resolve.modules ?? [])];
+    return config;
+  },
 };
 
 export default nextConfig;

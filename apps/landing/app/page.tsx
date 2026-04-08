@@ -18,6 +18,14 @@ import {
   STATE_XML_STUB,
   TASK_REGISTRY_STUB,
 } from "@/lib/planning-content";
+import {
+  INIT_HELP_SAMPLE,
+  PACK_EMBED_BUILD_HELP_SAMPLE,
+  REFERENCE_LINKS,
+  REPORT_GENERATE_SAMPLE,
+  SETUP_CHECKLIST_SAMPLE,
+  SNAPSHOT_SAMPLE,
+} from "@/lib/cli-output-samples";
 import { SHOWCASE_BUTTON_CODE, SHOWCASE_TABLE_CODE } from "@/lib/showcase-snippets";
 
 const YOUTUBE_ID = "958hJe-AcvU";
@@ -32,6 +40,7 @@ const REPO_PLANNER_GITHUB = "https://github.com/MagicbornStudios/RepoPlanner";
 const navLinks = [
   { href: "#philosophy", label: "Philosophy" },
   { href: "#cli", label: "CLI" },
+  { href: "/cockpit", label: "Cockpit demo" },
   { href: "#artifacts", label: "Artifacts" },
   { href: "#components", label: "Components" },
   { href: "#init", label: "Init bundle" },
@@ -39,11 +48,26 @@ const navLinks = [
 ] as const;
 
 const cliCommands = [
-  { cmd: "snapshot", role: "Summarize planning state from configured roots into a readable digest for agents." },
-  { cmd: "checklist", role: "Surface checklist-style progress against roadmap / task registry expectations." },
-  { cmd: "init", role: "Bootstrap a minimal `.planning/` tree (XML templates + AGENTS.md + config)." },
-  { cmd: "reports", role: "Generate or refresh planning reports the host can render or archive." },
-  { cmd: "pack helpers", role: "Build or inspect planning-pack payloads for embed / gallery flows." },
+  {
+    cmd: "planning snapshot",
+    role: "One digest: sprint-scoped phases, workflow summary, STATE, tasks, optional AGENTS.md re-injection — steers the next action without opening every XML file.",
+  },
+  {
+    cmd: "planning setup checklist",
+    role: "Verify git, `.planning/`, and core XML exist (brownfield sanity check before you lean on the loop).",
+  },
+  {
+    cmd: "planning init",
+    role: "Bootstrap `.planning/` (full or `--minimal`), templates, and repo-root narrative files where applicable.",
+  },
+  {
+    cmd: "planning report …",
+    role: "Generate markdown reports under `.planning/reports/` from the agent-loop template; optional local viewer.",
+  },
+  {
+    cmd: "planning pack embed-build",
+    role: "Emit `builtin-packs.json` from `.planning/` (+ optional docs dir) for static cockpit embeds.",
+  },
 ] as const;
 
 const artifacts = [
@@ -129,6 +153,12 @@ export default function Page() {
 
         <div className="mt-8 flex flex-wrap gap-2">
           <Button asChild size="sm" className="gap-2">
+            <a href="/cockpit">
+              <Terminal className="size-4" aria-hidden />
+              Open cockpit demo
+            </a>
+          </Button>
+          <Button asChild size="sm" variant="outline" className="gap-2">
             <a href={REPO_PLANNER_GITHUB} target="_blank" rel="noopener noreferrer">
               <Github className="size-4" aria-hidden />
               RepoPlanner source
@@ -287,10 +317,99 @@ export default function Page() {
             </Table>
           </div>
 
+          <div className="mt-10 space-y-4 text-sm leading-relaxed text-[var(--muted-foreground)]">
+            <h3 className="font-display text-lg font-medium text-[var(--foreground)]">Snapshot ≈ Ralph loop fuel</h3>
+            <p>
+              The <strong className="text-[var(--foreground)]">Ralph Wiggum</strong> pattern (persistent iteration with
+              clear stop conditions) shows up in agent tooling under many names — see{" "}
+              <a href={REFERENCE_LINKS.ralphAwesome} className="text-[var(--primary)] underline-offset-4 hover:underline" target="_blank" rel="noopener noreferrer">
+                Awesome Claude — Ralph Wiggum
+              </a>
+              ,{" "}
+              <a
+                href={REFERENCE_LINKS.ralphDevInterrupted}
+                className="text-[var(--primary)] underline-offset-4 hover:underline"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Inventing the Ralph Wiggum Loop (Dev Interrupted)
+              </a>
+              , and{" "}
+              <a href={REFERENCE_LINKS.ralphYoutube} className="text-[var(--primary)] underline-offset-4 hover:underline" target="_blank" rel="noopener noreferrer">
+                the creator interview on YouTube
+              </a>
+              . RepoPlanner&apos;s CLI is the <strong className="text-[var(--foreground)]">brownfield</strong> variant:
+              each <code className="font-mono text-xs">snapshot</code> is a <strong className="text-[var(--foreground)]">steering digest</strong> — it
+              narrows attention to the current sprint window, workflow signals, and the next actionable tasks instead of
+              re-reading every artifact. It also <strong className="text-[var(--foreground)]">re-injects</strong> root{" "}
+              <code className="font-mono text-xs">AGENTS.md</code> under <code className="font-mono text-xs">BEHAVIOR</code> so
+              the loop rules ride along with every run (same spirit as handing the agent its standing orders each
+              iteration).
+            </p>
+            <p>
+              Optional <code className="font-mono text-xs">planning new-agent-id</code> still prints a fresh{" "}
+              <code className="font-mono text-xs">agent-YYYYMMDD-xxxx</code> id when you use the task-claim flow — it is
+              not required for read-only planning.
+            </p>
+            <p>
+              Lineage: <a href={REFERENCE_LINKS.gsd} className="text-[var(--primary)] underline-offset-4 hover:underline" target="_blank" rel="noopener noreferrer">Get Shit Done</a>{" "}
+              principles, heavy inspiration from{" "}
+              <a href={REFERENCE_LINKS.repomirror} className="text-[var(--primary)] underline-offset-4 hover:underline" target="_blank" rel="noopener noreferrer">
+                repomirror
+              </a>{" "}
+              (&quot;lighter framework and guidelines&quot; vs rigid checklists).{" "}
+              <a href={REFERENCE_LINKS.gadSite} className="text-[var(--primary)] underline-offset-4 hover:underline" target="_blank" rel="noopener noreferrer">
+                Get Anything Done
+              </a>{" "}
+              measures how much structure actually helps — see the live site for the latest evals and write-ups.
+            </p>
+          </div>
+
+          <div className="mt-12">
+            <h3 className="font-display text-lg font-medium text-[var(--foreground)]">Example output (illustrative)</h3>
+            <p className="mt-2 text-sm text-[var(--muted-foreground)]">
+              Truncated samples — real repos include longer AGENTS sections and task tables. Run the CLI locally for
+              authoritative output.
+            </p>
+            <div className="mt-6 space-y-8">
+              <div>
+                <h4 className="text-sm font-medium text-[var(--foreground)]">planning snapshot</h4>
+                <div className="mt-2">
+                  <CopyBlock label="terminal">{SNAPSHOT_SAMPLE}</CopyBlock>
+                </div>
+              </div>
+              <div>
+                <h4 className="text-sm font-medium text-[var(--foreground)]">planning setup checklist</h4>
+                <div className="mt-2">
+                  <CopyBlock label="terminal">{SETUP_CHECKLIST_SAMPLE}</CopyBlock>
+                </div>
+              </div>
+              <div>
+                <h4 className="text-sm font-medium text-[var(--foreground)]">planning init --help</h4>
+                <div className="mt-2">
+                  <CopyBlock label="terminal">{INIT_HELP_SAMPLE}</CopyBlock>
+                </div>
+              </div>
+              <div>
+                <h4 className="text-sm font-medium text-[var(--foreground)]">planning report generate (behavior)</h4>
+                <div className="mt-2">
+                  <CopyBlock label="terminal">{REPORT_GENERATE_SAMPLE}</CopyBlock>
+                </div>
+              </div>
+              <div>
+                <h4 className="text-sm font-medium text-[var(--foreground)]">planning pack embed-build --help</h4>
+                <div className="mt-2">
+                  <CopyBlock label="terminal">{PACK_EMBED_BUILD_HELP_SAMPLE}</CopyBlock>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="mt-10">
             <h3 className="font-display text-lg font-medium text-[var(--foreground)]">How the CLI sits in a repo</h3>
             <p className="mt-2 text-sm text-[var(--muted-foreground)]">
-              Config points at planning roots; the CLI reads and summarizes the same files the cockpit displays.
+              Config points at planning roots; the CLI reads and summarizes the same files the cockpit displays. Try the
+              interactive read-only cockpit on <a className="text-[var(--primary)] underline-offset-4 hover:underline" href="/cockpit">/cockpit</a>.
             </p>
             <div className="mt-4">
               <MermaidBlock chart={CHART_CLI_FLOW} />
@@ -405,7 +524,16 @@ export default function Page() {
 
             <ShowcasePanel
               title="Cockpit (mock)"
-              description="Illustrative shell: roadmap column, STATE next-action, TASK-REGISTRY rows. Not connected to live XML."
+              description={
+                <>
+                  Illustrative shell: roadmap column, STATE next-action, TASK-REGISTRY rows. For the full in-browser
+                  workspace (static pack, no persistence), open{" "}
+                  <a className="text-[var(--primary)] underline-offset-4 hover:underline" href="/cockpit">
+                    /cockpit
+                  </a>
+                  .
+                </>
+              }
               code={cockpitSource}
               codeLabel="cockpit-preview.tsx"
             >

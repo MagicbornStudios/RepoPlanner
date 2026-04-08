@@ -1,16 +1,28 @@
 @import "tailwindcss";
 
+@theme {
+  --color-dark-alt: #171412;
+}
+
 :root {
   --background: #0c0a09;
   --foreground: #fafaf9;
   --card: #1c1917;
   --card-foreground: #fafaf9;
+  --popover: #1c1917;
+  --popover-foreground: #fafaf9;
   --muted: #292524;
   --muted-foreground: #a8a29e;
   --border: #44403c;
   --primary: #ea580c;
   --primary-foreground: #fff7ed;
   --ring: #fb923c;
+  --destructive: #ef4444;
+  --chart-1: #ea580c;
+  --chart-2: #f97316;
+  --chart-3: #fb923c;
+  --chart-4: #fdba74;
+  --chart-5: #fed7aa;
 }
 
 body {

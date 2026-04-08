@@ -39,6 +39,16 @@ export type PlanningCockpitDashboardProps = {
   builtinPacks?: PlanningPack[];
   preferBuiltinPackId?: string;
   hostPolicy?: Partial<PlanningHostPolicy>;
+  /**
+   * Ephemeral embed: do not read/write `localStorage` workspace — state resets on reload.
+   * Use for static site demos where persistence would confuse visitors.
+   */
+  demoMode?: boolean;
+  /**
+   * Hide the live repository / API pane (static hosting has no planning GET routes).
+   * Pack mode, built-ins, and optional file uploads still work in-session.
+   */
+  packOnly?: boolean;
 };
 
 export function PlanningCockpitDashboard({
@@ -47,6 +57,8 @@ export function PlanningCockpitDashboard({
   builtinPacks = [],
   preferBuiltinPackId,
   hostPolicy,
+  demoMode = false,
+  packOnly = false,
 }: PlanningCockpitDashboardProps) {
   const [state, setState] = useState<WorkspaceStateV1>(defaultWorkspaceState);
   const [previewPack, setPreviewPack] = useState<PlanningPack | null>(null);
@@ -64,16 +76,27 @@ export function PlanningCockpitDashboard({
   const policy = useMemo(() => resolvePlanningHostPolicy(hostPolicy), [hostPolicy]);
 
   useEffect(() => {
-    setState(loadWorkspaceState());
+    if (demoMode) {
+      setState(defaultWorkspaceState());
+    } else {
+      setState(loadWorkspaceState());
+    }
     setHydrated(true);
-  }, []);
+  }, [demoMode]);
 
-  const persist = useCallback((next: WorkspaceStateV1) => {
-    setState(next);
-    const result = saveWorkspaceState(next);
-    if (!result.ok) setSaveError(result.error);
-    else setSaveError(null);
-  }, []);
+  const persist = useCallback(
+    (next: WorkspaceStateV1) => {
+      setState(next);
+      if (demoMode) {
+        setSaveError(null);
+        return;
+      }
+      const result = saveWorkspaceState(next);
+      if (!result.ok) setSaveError(result.error);
+      else setSaveError(null);
+    },
+    [demoMode],
+  );
 
   useEffect(() => {
     if (!hydrated || !preferBuiltinPackId || appliedPreferBuiltin.current) return;
@@ -124,8 +147,9 @@ export function PlanningCockpitDashboard({
 
   const derivedMode =
     hydrated && state.activeProjectId === liveProject.id && !surfaceBuiltinId && !previewSelected ? "live" : "pack";
-  const activeMode = modeOverride ?? derivedMode;
-  const showLivePane = hydrated && activeMode === "live";
+  /** Static embeds have no server-side planning APIs — keep UI in pack mode. */
+  const activeMode = packOnly ? "pack" : (modeOverride ?? derivedMode);
+  const showLivePane = !packOnly && hydrated && activeMode === "live";
   const packReadOnly = Boolean(surfaceBuiltinId) || previewSelected || activeMode === "live";
 
   const kpis = useMemo(() => {
@@ -172,11 +196,12 @@ export function PlanningCockpitDashboard({
   }, []);
 
   const selectLive = useCallback(() => {
+    if (packOnly) return;
     setSelectedFilePath(null);
     setModeOverride("live");
     setPreviewSelected(false);
     persist({ ...state, activeProjectId: liveProject.id, surfaceBuiltinPackId: null });
-  }, [liveProject.id, persist, state]);
+  }, [liveProject.id, packOnly, persist, state]);
 
   const selectBuiltin = useCallback((packId: string) => {
     const pack = builtinPacks.find((entry) => entry.id === packId);
@@ -395,33 +420,42 @@ export function PlanningCockpitDashboard({
         <div className="border-b border-border/80 bg-muted/30 px-3 py-3 sm:px-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="space-y-1">
-              <div className="inline-flex rounded-lg border border-border/70 bg-background/70 p-1">
-                <button
-                  type="button"
-                  onClick={selectLive}
-                  className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium transition ${
-                    activeMode === "live" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  <HardDrive className="size-3.5" />
-                  Live
-                </button>
-                <button
-                  type="button"
-                  onClick={switchToPackMode}
-                  className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium transition ${
-                    activeMode === "pack" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  <Layers className="size-3.5" />
-                  Pack
-                </button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {activeMode === "live"
-                  ? "Live reads the configured planning roots through the server bundle and stays read-only in this embed."
-                  : "Pack mode uses built-in, preview, or local uploaded files in this browser. No live repository labels or server writes are implied here."}
-              </p>
+              {packOnly ? (
+                <p className="text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">Pack demo</span> — built-in snapshot and browser-local
+                  uploads only. No live repository API on this host.
+                </p>
+              ) : (
+                <>
+                  <div className="inline-flex rounded-lg border border-border/70 bg-background/70 p-1">
+                    <button
+                      type="button"
+                      onClick={selectLive}
+                      className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium transition ${
+                        activeMode === "live" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <HardDrive className="size-3.5" />
+                      Live
+                    </button>
+                    <button
+                      type="button"
+                      onClick={switchToPackMode}
+                      className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium transition ${
+                        activeMode === "pack" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <Layers className="size-3.5" />
+                      Pack
+                    </button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {activeMode === "live"
+                      ? "Live reads the configured planning roots through the server bundle and stays read-only in this embed."
+                      : "Pack mode uses built-in, preview, or local uploaded files in this browser. No live repository labels or server writes are implied here."}
+                  </p>
+                </>
+              )}
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -447,15 +481,17 @@ export function PlanningCockpitDashboard({
                   Preview upload
                 </Button>
               </div>
-              <div className="inline-flex rounded-lg border border-border/70 bg-background/70 p-1">
-                <a
-                  href="/api/planning-templates/minimal"
-                  className="inline-flex h-9 items-center gap-1.5 rounded-md px-3 text-sm font-medium text-foreground transition hover:bg-muted/60"
-                >
-                  <Download className="size-4" />
-                  Init template
-                </a>
-              </div>
+              {!packOnly ? (
+                <div className="inline-flex rounded-lg border border-border/70 bg-background/70 p-1">
+                  <a
+                    href="/api/planning-templates/minimal"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-md px-3 text-sm font-medium text-foreground transition hover:bg-muted/60"
+                  >
+                    <Download className="size-4" />
+                    Init template
+                  </a>
+                </div>
+              ) : null}
               <div className="inline-flex rounded-lg border border-border/70 bg-background/70 p-1">
                 <Button type="button" variant="ghost" size="sm" className="gap-1.5" onClick={exportWorkspace}>
                   <Download className="size-4" />
