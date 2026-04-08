@@ -4,7 +4,11 @@ Embeddable planning cockpit, parsing helpers, and CLI tooling for roadmap/state/
 
 ## Public landing site
 
-A **single-page Next.js** explainer (Tailwind v4, shadcn-style primitives) lives in **`apps/landing`**. Deploy on [Vercel](https://vercel.com) with **Root Directory** set to `apps/landing` and Node 22+. See [`apps/landing/README.md`](./apps/landing/README.md).
+A **single-page Next.js** explainer (archived, Tailwind v4, shadcn-style primitives) lives in **`apps/landing`** on **`main`**. It describes what RepoPlanner was, how work moved to **GAD** ([get-anything-done](https://github.com/MagicbornStudios/get-anything-done)), and why the project is not actively maintained. Deploy on [Vercel](https://vercel.com): **branch `main`**, **Root Directory `apps/landing`**, Node 22+. See [`apps/landing/README.md`](./apps/landing/README.md).
+
+## Branch `gad-planner`
+
+The **`gad-planner`** branch keeps an **orphaned** line of experiments from after the **skills** work and GAD-era planning churn — **not** the product baseline. **Real RepoPlanner** is the **`main`** snapshot at **pre-skills** + the landing app above.
 
 [INSTALL.md](./INSTALL.md) documents host integration details.
 
