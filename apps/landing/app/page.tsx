@@ -1,10 +1,15 @@
-import { ArrowUpRight, BookOpen, LineChart, Terminal } from "lucide-react";
+import { ArrowUpRight, BookOpen, ExternalLink, Github, LineChart, Terminal } from "lucide-react";
 
+import { CockpitPreview } from "@/components/cockpit-preview";
 import { CopyBlock } from "@/components/copy-block";
+import { InitBundleDownload } from "@/components/init-bundle-download";
 import { MermaidBlock } from "@/components/mermaid-block";
+import { ShowcaseArtifactTable, ShowcaseButtonRow } from "@/components/showcase-primitives";
+import { ShowcasePanel } from "@/components/showcase-panel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { getCockpitPreviewSource } from "@/lib/get-cockpit-source";
 import {
   CHART_ARTIFACT_GRAPH,
   CHART_CLI_FLOW,
@@ -13,13 +18,25 @@ import {
   STATE_XML_STUB,
   TASK_REGISTRY_STUB,
 } from "@/lib/planning-content";
+import { SHOWCASE_BUTTON_CODE, SHOWCASE_TABLE_CODE } from "@/lib/showcase-snippets";
 
 const YOUTUBE_ID = "958hJe-AcvU";
 const YOUTUBE_START_SEC = 610;
 
 const GET_ANYTHING_DONE = "https://github.com/MagicbornStudios/get-anything-done";
+const GET_ANYTHING_DONE_SITE = "https://get-anything-done.vercel.app/";
 const GSD_UPSTREAM = "https://github.com/gsd-build/get-shit-done";
 const GAD_EVALS = "https://github.com/MagicbornStudios/get-anything-done/tree/main/evals";
+const REPO_PLANNER_GITHUB = "https://github.com/MagicbornStudios/RepoPlanner";
+
+const navLinks = [
+  { href: "#philosophy", label: "Philosophy" },
+  { href: "#cli", label: "CLI" },
+  { href: "#artifacts", label: "Artifacts" },
+  { href: "#components", label: "Components" },
+  { href: "#init", label: "Init bundle" },
+  { href: "#gad", label: "Active work" },
+] as const;
 
 const cliCommands = [
   { cmd: "snapshot", role: "Summarize planning state from configured roots into a readable digest for agents." },
@@ -70,6 +87,7 @@ const artifacts = [
 export default function Page() {
   const embedSrc = `https://www.youtube-nocookie.com/embed/${YOUTUBE_ID}?start=${YOUTUBE_START_SEC}`;
   const youtubeWatch = `https://www.youtube.com/watch?v=${YOUTUBE_ID}&t=${YOUTUBE_START_SEC}s`;
+  const cockpitSource = getCockpitPreviewSource();
 
   return (
     <main className="relative overflow-hidden">
@@ -81,7 +99,7 @@ export default function Page() {
       />
 
       {/* Hero — RepoPlanner is the site */}
-      <header className="mx-auto max-w-4xl px-4 pb-10 pt-16 sm:px-6 sm:pb-14 sm:pt-20">
+      <header className="mx-auto max-w-4xl px-4 pb-6 pt-16 sm:px-6 sm:pb-8 sm:pt-20">
         <p className="font-display text-xs font-semibold uppercase tracking-[0.2em] text-[var(--primary)]">
           Planning cockpit &amp; CLI
         </p>
@@ -97,9 +115,142 @@ export default function Page() {
         </p>
         <p className="mt-4 text-sm text-[var(--muted-foreground)]">
           This project is <span className="text-[var(--foreground)]">archived</span> — the ideas below stay valid as a
-          reference implementation. Active CLI and eval work continues in Get Anything Done (see end of page).
+          reference implementation. Active CLI, skills, and eval work continues in{" "}
+          <a
+            href={GET_ANYTHING_DONE_SITE}
+            className="text-[var(--primary)] underline-offset-4 hover:underline"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Get Anything Done
+          </a>{" "}
+          (see <a href="#gad" className="text-[var(--primary)] underline-offset-4 hover:underline">Active work</a>).
         </p>
+
+        <div className="mt-8 flex flex-wrap gap-2">
+          <Button asChild size="sm" className="gap-2">
+            <a href={REPO_PLANNER_GITHUB} target="_blank" rel="noopener noreferrer">
+              <Github className="size-4" aria-hidden />
+              RepoPlanner source
+            </a>
+          </Button>
+          <Button asChild size="sm" variant="outline" className="gap-2">
+            <a href={GET_ANYTHING_DONE_SITE} target="_blank" rel="noopener noreferrer">
+              <ExternalLink className="size-4" aria-hidden />
+              get-anything-done site
+            </a>
+          </Button>
+          <Button asChild size="sm" variant="outline" className="gap-2">
+            <a href={GET_ANYTHING_DONE} target="_blank" rel="noopener noreferrer">
+              <Github className="size-4" aria-hidden />
+              GAD on GitHub
+            </a>
+          </Button>
+        </div>
+
+        <nav
+          className="mt-10 flex flex-wrap gap-x-4 gap-y-2 border-t border-[var(--border)] pt-6 text-sm"
+          aria-label="On this page"
+        >
+          {navLinks.map((l) => (
+            <a
+              key={l.href}
+              href={l.href}
+              className="text-[var(--muted-foreground)] underline-offset-4 transition-colors hover:text-[var(--primary)] hover:underline"
+            >
+              {l.label}
+            </a>
+          ))}
+        </nav>
       </header>
+
+      {/* Philosophy — skillless Ralph, brownfield */}
+      <section className="border-t border-[var(--border)] bg-[#141110]/80 py-14" id="philosophy">
+        <div className="mx-auto max-w-4xl px-4 sm:px-6">
+          <h2 className="font-display text-2xl font-semibold text-[var(--foreground)] sm:text-3xl">
+            Skillless Ralph Wiggum loop — brownfield only
+          </h2>
+          <p className="mt-4 max-w-3xl text-[var(--muted-foreground)]">
+            <strong className="text-[var(--foreground)]">“Ralph Wiggum loop”</strong> here means the same tight cycle
+            people describe in agent memes: read state, do one thing, write state back, repeat. RepoPlanner implements
+            that loop with <strong className="text-[var(--foreground)]">files on disk</strong> and optional tooling —
+            not with a library of agent skills, MCP tool packs, or hidden session state.
+          </p>
+
+          <div className="mt-10 grid gap-8 lg:grid-cols-2">
+            <div>
+              <h3 className="font-display text-lg font-medium text-[var(--foreground)]">What “skillless” means</h3>
+              <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-relaxed text-[var(--muted-foreground)]">
+                <li>
+                  <strong className="text-[var(--foreground)]">No skills layer</strong> — no YAML triggers, no skill
+                  registry, no “when the user says X invoke skill Y.” Agents follow{" "}
+                  <code className="font-mono text-xs">AGENTS.md</code> and the XML the same way a human would.
+                </li>
+                <li>
+                  <strong className="text-[var(--foreground)]">Visible state</strong> — roadmap, tasks, decisions, and
+                  errors live in git-tracked files. The cockpit and CLI are <strong>views</strong>, not a second source of
+                  truth.
+                </li>
+                <li>
+                  <strong className="text-[var(--foreground)]">Host-owned UI</strong> — React surfaces ship as packages
+                  you embed; this site only demonstrates primitives and a <strong>mock</strong> cockpit preview.
+                </li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="font-display text-lg font-medium text-[var(--foreground)]">Why brownfield only</h3>
+              <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-relaxed text-[var(--muted-foreground)]">
+                <li>
+                  RepoPlanner assumes you already have a repo: modules, tests, CI, and history. Tasks reference{" "}
+                  <strong className="text-[var(--foreground)]">real verification commands</strong> and paths.
+                </li>
+                <li>
+                  Greenfield product invention (what to build, user research, blank-slate architecture) is not encoded
+                  here — the loop is for <strong className="text-[var(--foreground)]">shipping and maintaining</strong>{" "}
+                  software that already exists.
+                </li>
+                <li>
+                  If you need measured workflows, skills, and eval harnesses across greenfield and brownfield, use{" "}
+                  <a
+                    href={GET_ANYTHING_DONE_SITE}
+                    className="text-[var(--primary)] underline-offset-4 hover:underline"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Get Anything Done
+                  </a>{" "}
+                  as the active framework; RepoPlanner remains a <strong className="text-[var(--foreground)]">file + UI</strong>{" "}
+                  reference.
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="mt-10 rounded-xl border border-[var(--border)] bg-[#0f0d0c] p-5">
+            <h3 className="text-sm font-medium text-[var(--foreground)]">One iteration, spelled out</h3>
+            <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-[var(--muted-foreground)]">
+              <li>
+                <strong className="text-[var(--foreground)]">Snapshot</strong> — CLI or cockpit shows current phase and{" "}
+                <code className="font-mono text-xs">next-action</code> from <code className="font-mono text-xs">STATE.xml</code>.
+              </li>
+              <li>
+                <strong className="text-[var(--foreground)]">Pick</strong> — exactly one <code className="font-mono text-xs">planned</code>{" "}
+                task in <code className="font-mono text-xs">TASK-REGISTRY.xml</code>.
+              </li>
+              <li>
+                <strong className="text-[var(--foreground)]">Implement</strong> — minimal diff; run listed commands.
+              </li>
+              <li>
+                <strong className="text-[var(--foreground)]">Record</strong> — update XML/Markdown, add decisions or
+                errors as needed.
+              </li>
+              <li>
+                <strong className="text-[var(--foreground)]">Commit</strong> — preferably one commit per task for traceability.
+              </li>
+            </ol>
+          </div>
+        </div>
+      </section>
 
       {/* CLI */}
       <section className="border-t border-[var(--border)] bg-[#141110]/80 py-14" id="cli">
@@ -220,32 +371,111 @@ export default function Page() {
         </div>
       </section>
 
+      {/* Component showcase — shadcn-style Preview / Code tabs */}
+      <section className="border-t border-[var(--border)] bg-[#141110]/50 py-14" id="components">
+        <div className="mx-auto max-w-4xl px-4 sm:px-6">
+          <h2 className="font-display text-2xl font-semibold text-[var(--foreground)] sm:text-3xl">UI components</h2>
+          <p className="mt-3 max-w-3xl text-[var(--muted-foreground)]">
+            The landing app vendors lightweight primitives (Button, Card, Table, Tabs) in the same spirit as{" "}
+            <strong className="text-[var(--foreground)]">shadcn/ui</strong>: copy-owned components, Radix behavior, token
+            styling. Each block below has a <strong className="text-[var(--foreground)]">Preview</strong> tab (live) and a{" "}
+            <strong className="text-[var(--foreground)]">Code</strong> tab (what you would paste into a host). The{" "}
+            <strong className="text-[var(--foreground)]">cockpit</strong> preview is static — real hosts import{" "}
+            <code className="font-mono text-xs">repo-planner/host</code> and wire XML/packs.
+          </p>
+
+          <div className="mt-10 space-y-10">
+            <ShowcasePanel
+              title="Buttons"
+              description="Primary actions and secondary/outline affordances — same variants the CLI docs and cards use."
+              code={SHOWCASE_BUTTON_CODE}
+              codeLabel="ShowcaseButtonRow.tsx"
+            >
+              <ShowcaseButtonRow />
+            </ShowcasePanel>
+
+            <ShowcasePanel
+              title="Table"
+              description="Tabular planning data (commands, artifacts) uses the same table primitives as this page."
+              code={SHOWCASE_TABLE_CODE}
+              codeLabel="ShowcaseArtifactTable.tsx"
+            >
+              <ShowcaseArtifactTable />
+            </ShowcasePanel>
+
+            <ShowcasePanel
+              title="Cockpit (mock)"
+              description="Illustrative shell: roadmap column, STATE next-action, TASK-REGISTRY rows. Not connected to live XML."
+              code={cockpitSource}
+              codeLabel="cockpit-preview.tsx"
+            >
+              <CockpitPreview />
+            </ShowcasePanel>
+          </div>
+        </div>
+      </section>
+
+      {/* Downloadable init bundle */}
+      <section className="mx-auto max-w-4xl px-4 py-14 sm:px-6" id="init">
+        <h2 className="font-display text-2xl font-semibold text-[var(--foreground)] sm:text-3xl">Minimal init bundle</h2>
+        <p className="mt-3 max-w-3xl text-[var(--muted-foreground)]">
+          Download the same file layout the CLI would write for a minimal bootstrap: repo-root narrative,{" "}
+          <code className="font-mono text-xs">planning-config.toml</code>, and core XML under{" "}
+          <code className="font-mono text-xs">.planning/</code>. Use it to diff against your brownfield repo or to seed a
+          review in PR form.
+        </p>
+        <div className="mt-8">
+          <InitBundleDownload />
+        </div>
+      </section>
+
       {/* GAD / lineage — secondary */}
       <section className="border-t border-[var(--border)] bg-[#141110]/50 py-14" id="gad">
         <div className="mx-auto max-w-4xl px-4 sm:px-6">
           <h2 className="font-display text-2xl font-semibold text-[var(--foreground)]">Where active work lives</h2>
           <p className="mt-3 max-w-2xl text-[var(--muted-foreground)]">
-            The team moved day-to-day planning to <strong className="text-[var(--foreground)]">Get Anything Done</strong>{" "}
-            — a CLI, shared docs model, and an evaluation framework so outcomes are measurable. Lineage traces to{" "}
+            Day-to-day planning and benchmarks for the wider framework live in{" "}
+            <strong className="text-[var(--foreground)]">Get Anything Done</strong> — CLI, skills, eval harness, and the
+            public site that explains results. Lineage traces to{" "}
             <a href={GSD_UPSTREAM} className="text-[var(--primary)] underline-offset-4 hover:underline">
               Get Shit Done
             </a>
             .
           </p>
 
-          <div className="mt-8 grid gap-6 md:grid-cols-2">
+          <div className="mt-8 grid gap-6 md:grid-cols-3">
+            <Card className="border-[var(--border)] bg-[var(--card)] md:col-span-1">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <ExternalLink className="size-5 text-[var(--primary)]" aria-hidden />
+                  GAD site
+                </CardTitle>
+                <CardDescription>
+                  Marketing + framework narrative, eval comparison, and &quot;run it locally&quot; — the public face of the
+                  project.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button className="w-full" asChild>
+                  <a href={GET_ANYTHING_DONE_SITE} target="_blank" rel="noopener noreferrer">
+                    get-anything-done.vercel.app
+                    <ArrowUpRight className="size-4" aria-hidden />
+                  </a>
+                </Button>
+              </CardContent>
+            </Card>
             <Card className="border-[var(--border)] bg-[var(--card)]">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <BookOpen className="size-5 text-[var(--primary)]" aria-hidden />
                   get-anything-done
                 </CardTitle>
-                <CardDescription>Primary open-source home for the GAD CLI, skills, and benchmarks.</CardDescription>
+                <CardDescription>GitHub — CLI source, skills, AGENTS loop, and release history.</CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-3">
-                <Button asChild className="w-full sm:w-auto">
+                <Button asChild variant="outline" className="w-full sm:w-auto">
                   <a href={GET_ANYTHING_DONE} target="_blank" rel="noopener noreferrer">
-                    GitHub — MagicbornStudios / get-anything-done
+                    MagicbornStudios / get-anything-done
                     <ArrowUpRight className="size-4" aria-hidden />
                   </a>
                 </Button>
@@ -262,7 +492,7 @@ export default function Page() {
               <CardContent>
                 <Button variant="outline" className="w-full" asChild>
                   <a href={GAD_EVALS} target="_blank" rel="noopener noreferrer">
-                    github.com/…/get-anything-done/tree/main/evals
+                    …/get-anything-done/tree/main/evals
                     <ArrowUpRight className="size-4" aria-hidden />
                   </a>
                 </Button>
@@ -291,8 +521,17 @@ export default function Page() {
           </div>
 
           <p className="mt-8 text-sm leading-relaxed text-[var(--muted-foreground)]">
-            RepoPlanner’s lighter constraints still show strong results in those GAD benchmarks — the harness makes
-            tradeoffs visible without claiming “more ceremony” always wins.
+            RepoPlanner’s lighter constraints still show up in those GAD benchmarks — the harness makes tradeoffs visible
+            without claiming “more ceremony” always wins. For the current story and scores, start at the{" "}
+            <a
+              href={GET_ANYTHING_DONE_SITE}
+              className="text-[var(--primary)] underline-offset-4 hover:underline"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              live site
+            </a>
+            .
           </p>
         </div>
       </section>
@@ -303,7 +542,7 @@ export default function Page() {
           <p className="mt-2">
             Source:{" "}
             <a
-              href="https://github.com/MagicbornStudios/RepoPlanner"
+              href={REPO_PLANNER_GITHUB}
               className="text-[var(--primary)] underline-offset-4 hover:underline"
               target="_blank"
               rel="noopener noreferrer"

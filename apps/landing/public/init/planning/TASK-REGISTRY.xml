@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<task-registry>
+  <phase id="01">
+    <task id="01-01" agent-id="" status="planned">
+      <goal>Replace stub REQUIREMENTS.md with real scope; align ROADMAP.xml and TASK-REGISTRY.xml with open work.</goal>
+      <keywords>bootstrap,requirements,roadmap,brownfield</keywords>
+      <commands>
+        <command>pnpm run lint</command>
+      </commands>
+      <depends></depends>
+    </task>
+  </phase>
+</task-registry>

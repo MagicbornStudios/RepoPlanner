@@ -18,10 +18,11 @@ const fraunces = Fraunces({
 export const metadata: Metadata = {
   title: "RepoPlanner — planning cockpit & CLI",
   description:
-    "RepoPlanner: XML-first .planning/ artifacts, repo-planner CLI, and embeddable React surfaces. Reference implementation; active work continues in get-anything-done.",
+    "RepoPlanner: XML-first .planning/ artifacts, repo-planner CLI, and embeddable React surfaces. Skillless Ralph-style loop for brownfield work; active framework + site at get-anything-done.vercel.app.",
   openGraph: {
     title: "RepoPlanner",
-    description: "Planning cockpit, CLI, and .planning/ file model — archived reference.",
+    description:
+      "Archived reference: planning files, CLI, UI primitives, init bundle. Get Anything Done: get-anything-done.vercel.app.",
   },
 };
 

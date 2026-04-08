@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<roadmap>
+  <phase id="01">
+    <goal>Keep repo-root REQUIREMENTS.md aligned with ROADMAP.xml, TASK-REGISTRY.xml, and STATE for agents and any RepoPlanner cockpit.</goal>
+    <status>active</status>
+    <depends></depends>
+  </phase>
+  <doc-flow>
+    <doc name="REQUIREMENTS.md">Primary narrative PRD + cross-cutting checklist at repo root (not under .planning/).</doc>
+    <doc name=".planning/ROADMAP.xml">Phase timeline for RepoPlanner.</doc>
+    <doc name=".planning/TASK-REGISTRY.xml">Task graph and status.</doc>
+    <doc name=".planning/AGENTS.md">Planning playbook for agents (roadmap-first).</doc>
+  </doc-flow>
+</roadmap>

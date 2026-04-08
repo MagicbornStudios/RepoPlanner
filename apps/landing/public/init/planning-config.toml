@@ -1,0 +1,11 @@
+[planning]
+sprintSize = 5
+currentProfile = "human"
+conventionsPaths = ["AGENTS.md", "REQUIREMENTS.md", ".planning/AGENTS.md"]
+
+[profiles.human]
+description = "Default human view."
+
+[profiles.agent]
+description = "Agent perspective; defaultJson = true."
+defaultJson = true

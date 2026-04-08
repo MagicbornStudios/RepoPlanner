@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<state>
+  <agent-registry />
+  <current-phase>01</current-phase>
+  <current-plan>bootstrap</current-plan>
+  <status>active</status>
+  <next-action>Edit REQUIREMENTS.md, .planning/ROADMAP.xml, TASK-REGISTRY.xml, and this file; read .planning/AGENTS.md. Pick one planned task, implement, update XML, commit.</next-action>
+  <references>
+    <reference>REQUIREMENTS.md</reference>
+    <reference>.planning/AGENTS.md</reference>
+    <reference>.planning/ROADMAP.xml</reference>
+    <reference>.planning/TASK-REGISTRY.xml</reference>
+    <reference>.planning/DECISIONS.xml</reference>
+  </references>
+  <agent-id-policy>
+    <format>agent-YYYYMMDD-xxxx</format>
+    <rule>Optional: register a unique id in STATE.xml before claiming tasks if you use CLI task-update.</rule>
+  </agent-id-policy>
+</state>

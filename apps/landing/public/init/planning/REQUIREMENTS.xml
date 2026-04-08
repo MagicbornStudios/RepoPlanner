@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<planning-references>
+  <doc>
+    <path>REQUIREMENTS.md</path>
+    <content><![CDATA[
+# Requirements (stub)
+
+Edit **REQUIREMENTS.md** at the repository root. This CDATA block is a bootstrap placeholder for tools that read REQUIREMENTS.xml only.
+]]></content>
+  </doc>
+</planning-references>
