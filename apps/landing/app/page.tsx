@@ -1,4 +1,5 @@
 import { ArrowUpRight, BookOpen, ExternalLink, Github, LineChart, Terminal } from "lucide-react";
+import Link from "next/link";
 
 import { CockpitPreview } from "@/components/cockpit-preview";
 import { CopyBlock } from "@/components/copy-block";
@@ -145,10 +146,10 @@ export default function Page() {
 
         <div className="mt-8 flex flex-wrap gap-2">
           <Button asChild size="sm" className="gap-2">
-            <a href="/cockpit">
+            <Link href="/cockpit">
               <Terminal className="size-4" aria-hidden />
               Open cockpit demo
-            </a>
+            </Link>
           </Button>
           <Button asChild size="sm" variant="outline" className="gap-2">
             <a href={REPO_PLANNER_GITHUB} target="_blank" rel="noopener noreferrer">
@@ -257,9 +258,9 @@ export default function Page() {
                 <li>
                   <strong className="text-[var(--foreground)]">Host-owned UI</strong> — React surfaces ship as packages
                   you embed; this site demonstrates primitives, a mock cockpit preview, and a{" "}
-                  <a className="text-[var(--primary)] underline-offset-4 hover:underline" href="/cockpit">
+                  <Link className="text-[var(--primary)] underline-offset-4 hover:underline" href="/cockpit">
                     pack-driven demo
-                  </a>{" "}
+                  </Link>{" "}
                   that matches the mock layout.
                 </li>
               </ul>
@@ -437,7 +438,11 @@ export default function Page() {
             <h3 className="font-display text-lg font-medium text-[var(--foreground)]">How the CLI sits in a repo</h3>
             <p className="mt-2 text-sm text-[var(--muted-foreground)]">
               Config points at planning roots; the CLI reads and summarizes the same files the cockpit displays. Try the
-              interactive read-only cockpit on <a className="text-[var(--primary)] underline-offset-4 hover:underline" href="/cockpit">/cockpit</a>.
+              interactive read-only cockpit on{" "}
+              <Link className="text-[var(--primary)] underline-offset-4 hover:underline" href="/cockpit">
+                /cockpit
+              </Link>
+              .
             </p>
             <div className="mt-4">
               <MermaidBlock chart={CHART_CLI_FLOW} />
@@ -557,9 +562,9 @@ export default function Page() {
               description={
                 <>
                   Static preview of the shell: roadmap column, STATE next-action, TASK-REGISTRY rows.{" "}
-                  <a className="text-[var(--primary)] underline-offset-4 hover:underline" href="/cockpit">
+                  <Link className="text-[var(--primary)] underline-offset-4 hover:underline" href="/cockpit">
                     /cockpit
-                  </a>{" "}
+                  </Link>{" "}
                   uses the same layout with data from the built-in pack (read-only, no persistence).
                 </>
               }
