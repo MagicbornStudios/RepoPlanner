@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <errors-and-attempts>
-  <!-- Reserved for failed approaches while evolving landing + pack pipeline. -->
+  <error id="RP-SITE-01" status="resolved">
+    <context>Landing Vercel build failed on @next/next/no-html-link-for-pages for internal / and /cockpit anchors.</context>
+    <attempts>Swapped raw &lt;a href&gt; for next/link in cockpit-demo and home page.tsx; documented ESLint rule in migration gaps.</attempts>
+  </error>
 </errors-and-attempts>

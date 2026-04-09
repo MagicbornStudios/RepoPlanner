@@ -495,9 +495,11 @@ export default function Page() {
                 The route is a <strong className="text-[var(--foreground)]">small read-only client app</strong>: fetch the JSON pack,
                 locate the three core XML files, run them through{" "}
                 <strong className="text-[var(--foreground)]">fast-xml-parser</strong> (attribute-aware parse to plain objects), then render
-                roadmap rows, the <code className="font-mono text-xs">next-action</code> string from <code className="font-mono text-xs">STATE.xml</code>, and task
-                list items with status from <code className="font-mono text-xs">TASK-REGISTRY.xml</code>. No writes, no fake task rows — if you
-                change XML on a branch and rebuild, the lists change. That is intentionally different from the home-page{" "}
+                roadmap rows (click a phase or <strong className="text-[var(--foreground)]">All phases</strong> to filter tasks), the{" "}
+                <code className="font-mono text-xs">next-action</code> string from <code className="font-mono text-xs">STATE.xml</code>, and task rows from{" "}
+                <code className="font-mono text-xs">TASK-REGISTRY.xml</code>. Tabs load <code className="font-mono text-xs">DECISIONS.xml</code> and{" "}
+                <code className="font-mono text-xs">ERRORS-AND-ATTEMPTS.xml</code>. No writes, no fake task rows — if you change XML on a branch and rebuild, the
+                UI updates. That is intentionally different from the home-page{" "}
                 <strong className="text-[var(--foreground)]">Cockpit (mock)</strong>, which uses fixed placeholder copy to show layout only.
               </p>
               <p className="mt-3 max-w-3xl">

@@ -1,6 +1,6 @@
 {
   "v": 1,
-  "generatedAt": "2026-04-09T03:22:24.431Z",
+  "generatedAt": "2026-04-09T03:44:02.037Z",
   "packs": [
     {
       "id": "rp-builtin-init",
@@ -29,7 +29,7 @@
         },
         {
           "path": ".planning/ERRORS-AND-ATTEMPTS.xml",
-          "content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<errors-and-attempts>\n  <!-- Reserved for failed approaches while evolving landing + pack pipeline. -->\n</errors-and-attempts>\n"
+          "content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<errors-and-attempts>\n  <error id=\"RP-SITE-01\" status=\"resolved\">\n    <context>Landing Vercel build failed on @next/next/no-html-link-for-pages for internal / and /cockpit anchors.</context>\n    <attempts>Swapped raw &lt;a href&gt; for next/link in cockpit-demo and home page.tsx; documented ESLint rule in migration gaps.</attempts>\n  </error>\n</errors-and-attempts>\n"
         },
         {
           "path": ".planning/REQUIREMENTS.xml",
