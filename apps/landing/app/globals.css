@@ -23,6 +23,7 @@
   --chart-3: #fb923c;
   --chart-4: #fdba74;
   --chart-5: #fed7aa;
+  --surface-inset: #0f0d0c;
 }
 
 body {
@@ -33,4 +34,42 @@ body {
 
 .font-display {
   font-family: var(--font-fraunces), ui-serif, Georgia, serif;
+}
+
+/* Warm section bands — no grid pattern; use page-level noise + these tints */
+.rp-section-band {
+  background: linear-gradient(180deg, rgba(28, 25, 23, 0.92) 0%, rgba(15, 13, 12, 0.97) 100%);
+}
+
+.rp-section-band-soft {
+  background: linear-gradient(180deg, rgba(28, 25, 23, 0.65) 0%, rgba(12, 10, 9, 0.88) 100%);
+}
+
+.rp-section-mid {
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklch, var(--muted) 35%, transparent) 0%,
+    color-mix(in oklch, var(--background) 92%, transparent) 100%
+  );
+}
+
+.rp-footer-slab {
+  background: linear-gradient(180deg, rgba(12, 10, 9, 0.88) 0%, rgba(9, 0, 0, 0.96) 100%);
+}
+
+.bg-rp-panel-soft {
+  background-color: color-mix(in oklch, var(--card) 55%, transparent);
+}
+
+/* Film grain + warm glow — replaces plus-sign SVG */
+.rp-hero-glow {
+  background: radial-gradient(ellipse 90% 60% at 50% -15%, rgba(251, 146, 60, 0.08), transparent 55%);
+}
+
+.rp-hero-noise {
+  opacity: 0.14;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='256'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 256px 256px;
 }

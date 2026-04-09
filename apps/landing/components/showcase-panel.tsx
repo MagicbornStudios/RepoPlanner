@@ -20,7 +20,7 @@ export function ShowcasePanel({
   children: ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-[var(--border)] bg-[#141110]/50 p-5">
+    <div className="bg-rp-panel-soft rounded-2xl border border-[var(--border)] p-5">
       <h3 className="font-display text-lg font-medium text-[var(--foreground)]">{title}</h3>
       {description ? (
         <div className="mt-2 text-sm text-[var(--muted-foreground)]">{description}</div>

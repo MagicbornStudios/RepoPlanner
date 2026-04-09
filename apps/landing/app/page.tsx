@@ -115,12 +115,8 @@ export default function Page() {
 
   return (
     <main className="relative overflow-hidden">
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.06]"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-        }}
-      />
+      <div aria-hidden className="pointer-events-none absolute inset-0 rp-hero-glow" />
+      <div aria-hidden className="pointer-events-none absolute inset-0 rp-hero-noise" />
 
       {/* Hero — RepoPlanner is the site */}
       <header className="mx-auto max-w-4xl px-4 pb-6 pt-16 sm:px-6 sm:pb-8 sm:pt-20">
@@ -195,7 +191,7 @@ export default function Page() {
       </header>
 
       {/* Philosophy — skillless Ralph, brownfield */}
-      <section className="border-t border-[var(--border)] bg-[#141110]/80 py-14" id="philosophy">
+      <section className="rp-section-band border-t border-[var(--border)] py-14" id="philosophy">
         <div className="mx-auto max-w-4xl px-4 sm:px-6">
           <h2 className="font-display text-2xl font-semibold text-[var(--foreground)] sm:text-3xl">
             Skillless Ralph Wiggum loop — brownfield only
@@ -283,7 +279,7 @@ export default function Page() {
       </section>
 
       {/* CLI */}
-      <section className="border-t border-[var(--border)] bg-[#141110]/80 py-14" id="cli">
+      <section className="rp-section-band border-t border-[var(--border)] py-14" id="cli">
         <div className="mx-auto max-w-4xl px-4 sm:px-6">
           <div className="flex items-start gap-3">
             <Terminal className="mt-1 size-8 shrink-0 text-[var(--primary)]" aria-hidden />
@@ -419,7 +415,8 @@ export default function Page() {
       </section>
 
       {/* Artifacts */}
-      <section className="mx-auto max-w-4xl px-4 py-14 sm:px-6" id="artifacts">
+      <section className="rp-section-mid border-t border-[var(--border)] py-14" id="artifacts">
+        <div className="mx-auto max-w-4xl px-4 sm:px-6">
         <h2 className="font-display text-2xl font-semibold text-[var(--foreground)] sm:text-3xl">
           <code className="font-mono">.planning/</code> artifacts
         </h2>
@@ -488,10 +485,11 @@ export default function Page() {
             </div>
           </div>
         </div>
+        </div>
       </section>
 
       {/* Component showcase — shadcn-style Preview / Code tabs */}
-      <section className="border-t border-[var(--border)] bg-[#141110]/50 py-14" id="components">
+      <section className="rp-section-band-soft border-t border-[var(--border)] py-14" id="components">
         <div className="mx-auto max-w-4xl px-4 sm:px-6">
           <h2 className="font-display text-2xl font-semibold text-[var(--foreground)] sm:text-3xl">UI components</h2>
           <p className="mt-3 max-w-3xl text-[var(--muted-foreground)]">
@@ -544,7 +542,8 @@ export default function Page() {
       </section>
 
       {/* Downloadable init bundle */}
-      <section className="mx-auto max-w-4xl px-4 py-14 sm:px-6" id="init">
+      <section className="rp-section-mid border-t border-[var(--border)] py-14" id="init">
+        <div className="mx-auto max-w-4xl px-4 sm:px-6">
         <h2 className="font-display text-2xl font-semibold text-[var(--foreground)] sm:text-3xl">Minimal init bundle</h2>
         <p className="mt-3 max-w-3xl text-[var(--muted-foreground)]">
           Download the same file layout the CLI would write for a minimal bootstrap: repo-root narrative,{" "}
@@ -555,10 +554,11 @@ export default function Page() {
         <div className="mt-8">
           <InitBundleDownload />
         </div>
+        </div>
       </section>
 
       {/* GAD / lineage — secondary */}
-      <section className="border-t border-[var(--border)] bg-[#141110]/50 py-14" id="gad">
+      <section className="rp-section-band-soft border-t border-[var(--border)] py-14" id="gad">
         <div className="mx-auto max-w-4xl px-4 sm:px-6">
           <h2 className="font-display text-2xl font-semibold text-[var(--foreground)]">Where active work lives</h2>
           <p className="mt-3 max-w-2xl text-[var(--muted-foreground)]">
@@ -664,7 +664,7 @@ export default function Page() {
         </div>
       </section>
 
-      <footer className="border-t border-[var(--border)] py-10">
+      <footer className="rp-footer-slab border-t border-[var(--border)] py-10">
         <div className="mx-auto max-w-4xl px-4 text-center text-xs text-[var(--muted-foreground)] sm:px-6">
           <p>RepoPlanner — archived reference; cockpit + CLI + planning file model.</p>
           <p className="mt-2">

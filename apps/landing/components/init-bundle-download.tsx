@@ -39,7 +39,7 @@ export function InitBundleDownload() {
   }, []);
 
   return (
-    <div className="rounded-2xl border border-[var(--border)] bg-[#141110]/50 p-5">
+    <div className="bg-rp-panel-soft rounded-2xl border border-[var(--border)] p-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h3 className="font-display text-lg font-medium text-[var(--foreground)]">Minimal init bundle</h3>
@@ -68,7 +68,7 @@ export function InitBundleDownload() {
             <a
               href={f.href}
               download
-              className="flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[#0f0d0c] px-3 py-2 text-xs font-mono text-[var(--primary)] transition-colors hover:bg-[var(--muted)]/30"
+              className="flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface-inset)] px-3 py-2 text-xs font-mono text-[var(--primary)] transition-colors hover:bg-[var(--muted)]/30"
             >
               <Download className="size-3.5 shrink-0 opacity-70" aria-hidden />
               <span className="min-w-0 truncate">{f.label}</span>

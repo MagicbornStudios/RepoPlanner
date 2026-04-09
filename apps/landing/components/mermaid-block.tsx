@@ -54,7 +54,7 @@ export function MermaidBlock({ chart, className }: { chart: string; className?: 
   return (
     <div
       className={cn(
-        "rounded-xl border border-[var(--border)] bg-[#141110] p-4 [&_svg]:mx-auto [&_svg]:max-w-full",
+        "rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 [&_svg]:mx-auto [&_svg]:max-w-full",
         className,
       )}
     >

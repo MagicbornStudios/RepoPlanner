@@ -24,7 +24,7 @@ export function CopyBlock({
   }, [children]);
 
   return (
-    <div className={cn("relative rounded-lg border border-[var(--border)] bg-[#0f0d0c]", className)}>
+    <div className={cn("relative rounded-lg border border-[var(--border)] bg-[var(--surface-inset)]", className)}>
       {label ? (
         <div className="flex items-center justify-between gap-2 border-b border-[var(--border)] px-3 py-2">
           <span className="text-xs font-medium text-[var(--muted-foreground)]">{label}</span>
