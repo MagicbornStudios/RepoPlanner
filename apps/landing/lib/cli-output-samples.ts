@@ -1,6 +1,8 @@
 /** Representative CLI output for the landing page (captured or hand-trimmed for length). */
 
-export const SNAPSHOT_SAMPLE = `BEHAVIOR (AGENTS.md)
+export const SNAPSHOT_SAMPLE = `$ planning snapshot
+
+BEHAVIOR (AGENTS.md)
 
 (… root AGENTS.md is inlined here so every snapshot re-injects the loop rules — typically multi‑thousand tokens. Prefer a short session start: read this block once, then rely on WORKFLOW + STATE below for the next action.)
 
@@ -55,23 +57,6 @@ when present. If the template is missing, the CLI prints a clear error with the
 expected path (e.g. .planning/templates/agent-loop-report.md.ejs).
 
 Typical follow-up: planning report view — opens a minimal local viewer.`;
-
-export const PACK_EMBED_BUILD_HELP_SAMPLE = `Usage: planning pack embed-build [options]
-
-Write builtin-packs.json: snapshot of .planning (rp-builtin-init) and optional
-docs folder (.md/.mdx bodies, front matter stripped).
-
-Options:
-  -o, --out <file>             Output JSON path (relative to cwd unless
-                               absolute)
-  --docs-dir <path>            Directory of markdown/MDX for the rp-builtin-docs
-                               pack (relative to project --root unless
-                               absolute); omit for init-only
-  --planning-dir <path>        Override .planning directory (default:
-                               <root>/.planning)
-  --docs-path-prefix <prefix>  Virtual path prefix in JSON for docs files
-                               (default: docs/repo-planner)
-  -h, --help                   display help for this command`;
 
 export const REFERENCE_LINKS = {
   ralphAwesome: "https://awesomeclaude.ai/ralph-wiggum",

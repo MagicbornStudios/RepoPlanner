@@ -46,8 +46,8 @@ export function InitBundleDownload() {
           <p className="mt-2 max-w-2xl text-sm text-[var(--muted-foreground)]">
             Same shape as <code className="font-mono text-xs">planning setup init --minimal</code>: repo-root{" "}
             <code className="font-mono text-xs">REQUIREMENTS.md</code>, <code className="font-mono text-xs">planning-config.toml</code>, and core XML under{" "}
-            <code className="font-mono text-xs">.planning/</code>. Merge into an <strong className="text-[var(--foreground)]">existing</strong> repository — this
-            loop is for brownfield work.
+            <code className="font-mono text-xs">.planning/</code>. Merge into an <strong className="text-[var(--foreground)]">existing</strong> repository when you
+            want the same file layout without running the CLI locally first.
           </p>
         </div>
         <Button

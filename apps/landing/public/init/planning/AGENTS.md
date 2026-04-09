@@ -1,10 +1,10 @@
-# Agent loop — skillless Ralph (brownfield only)
+# Agent loop — skillless Ralph
 
 This is a **skillless** take on the **Ralph Wiggum loop**: the agent reads durable state from disk, does **one** concrete task, updates the XML/Markdown record, and commits. There is **no** skills framework here — no trigger files, no skill packs — only **files + optional CLI + optional cockpit** in a host app.
 
-## Scope
+## Where it fits
 
-**Brownfield only.** RepoPlanner assumes an existing codebase: real directories, tests, CI, and git history. It does **not** replace product discovery or greenfield scaffolding; it gives you a **thin, inspectable** planning layer on top of code that already exists.
+RepoPlanner is **especially comfortable on existing repos**: real directories, tests, CI, and git history give tasks meaningful verification commands. You can use the same loop on a young repo too — the point is to keep **one** `.planning/` home for roadmap, state, and tasks instead of scattering notes across issues and ad hoc markdown.
 
 ## Loop (every iteration)
 

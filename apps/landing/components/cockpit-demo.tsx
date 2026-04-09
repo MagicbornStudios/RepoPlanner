@@ -1,60 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import {
-  builtinEmbedPackToPlanningPack,
-  defaultPlanningHostPolicy,
-  PlanningCockpitDashboard,
-  RepoPlannerWorkspaceShell,
-} from "repo-planner/host";
-import type { BuiltinEmbedPacksPayload } from "repo-planner/planning-pack";
-import type { PlanningPack } from "repo-planner/workspace-storage";
-
-import "repo-planner/planning.css";
-
-const demoPolicy = {
-  ...defaultPlanningHostPolicy,
-  hideRawSourceInInspector: false,
-};
+import { CockpitFromPack } from "@/components/cockpit-from-pack";
 
 /**
- * Full RepoPlanner workspace shell + dashboard, static built-in pack only.
- * `demoMode` + `packOnly` on the dashboard skip localStorage and live API routes.
+ * Cockpit route: mock-aligned shell fed by the static built-in pack (no host bundle weight).
  */
 export function CockpitDemo() {
-  const [builtinPacks, setBuiltinPacks] = useState<PlanningPack[]>([]);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/planning-embed/builtin-packs.json")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((payload: BuiltinEmbedPacksPayload | null) => {
-        if (cancelled || !payload?.packs?.length) return;
-        setBuiltinPacks(payload.packs.map((p) => builtinEmbedPackToPlanningPack(p)));
-      })
-      .catch(() => {
-        if (!cancelled) setBuiltinPacks([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   return (
-    <RepoPlannerWorkspaceShell className="min-h-screen rounded-none border-0 bg-transparent p-2 sm:p-4">
-      <PlanningCockpitDashboard
-        demoMode
-        packOnly
-        livePane={
-          <div className="p-4 text-sm text-muted-foreground">
-            Live planning APIs are not mounted on this static demo. Use{" "}
-            <strong className="text-foreground">Pack</strong> with the built-in snapshot or upload a local bundle.
-          </div>
-        }
-        builtinPacks={builtinPacks}
-        preferBuiltinPackId="rp-builtin-init"
-        hostPolicy={demoPolicy}
-      />
-    </RepoPlannerWorkspaceShell>
+    <div className="mx-auto min-h-screen max-w-2xl px-4 py-8 sm:py-12">
+      <p className="mb-6 text-center">
+        <a
+          href="/"
+          className="text-sm text-[var(--primary)] underline-offset-4 hover:underline"
+        >
+          ← Back to RepoPlanner
+        </a>
+      </p>
+      <CockpitFromPack preferPackId="rp-builtin-init" />
+      <p className="mt-6 text-center text-xs text-[var(--muted-foreground)]">
+        Read-only demo — browser session only, no persistence. Host apps wire real XML and packs via{" "}
+        <code className="font-mono text-[var(--muted-foreground)]">repo-planner/host</code>.
+      </p>
+    </div>
   );
 }

@@ -20,7 +20,6 @@ import {
 } from "@/lib/planning-content";
 import {
   INIT_HELP_SAMPLE,
-  PACK_EMBED_BUILD_HELP_SAMPLE,
   REFERENCE_LINKS,
   REPORT_GENERATE_SAMPLE,
   SETUP_CHECKLIST_SAMPLE,
@@ -38,6 +37,7 @@ const GAD_EVALS = "https://github.com/MagicbornStudios/get-anything-done/tree/ma
 const REPO_PLANNER_GITHUB = "https://github.com/MagicbornStudios/RepoPlanner";
 
 const navLinks = [
+  { href: "#quick-start", label: "Quick start" },
   { href: "#philosophy", label: "Philosophy" },
   { href: "#cli", label: "CLI" },
   { href: "/cockpit", label: "Cockpit demo" },
@@ -54,7 +54,7 @@ const cliCommands = [
   },
   {
     cmd: "planning setup checklist",
-    role: "Verify git, `.planning/`, and core XML exist (brownfield sanity check before you lean on the loop).",
+    role: "Verify git, `.planning/`, and core XML exist before you lean on the loop.",
   },
   {
     cmd: "planning init",
@@ -63,10 +63,6 @@ const cliCommands = [
   {
     cmd: "planning report …",
     role: "Generate markdown reports under `.planning/reports/` from the agent-loop template; optional local viewer.",
-  },
-  {
-    cmd: "planning pack embed-build",
-    role: "Emit `builtin-packs.json` from `.planning/` (+ optional docs dir) for static cockpit embeds.",
   },
 ] as const;
 
@@ -190,11 +186,52 @@ export default function Page() {
         </nav>
       </header>
 
-      {/* Philosophy — skillless Ralph, brownfield */}
+      {/* Quick start — init, agent handoff, snapshot shape */}
+      <section className="rp-section-band border-t border-[var(--border)] py-14" id="quick-start">
+        <div className="mx-auto max-w-4xl px-4 sm:px-6">
+          <h2 className="font-display text-2xl font-semibold text-[var(--foreground)] sm:text-3xl">Quick start</h2>
+          <ol className="mt-6 list-decimal space-y-3 pl-5 text-sm leading-relaxed text-[var(--muted-foreground)]">
+            <li>
+              <strong className="text-[var(--foreground)]">Bootstrap</strong> — run{" "}
+              <code className="rounded bg-[var(--muted)] px-1.5 py-0.5 font-mono text-xs">planning init</code> (add{" "}
+              <code className="font-mono text-xs">--minimal</code> if you want a lean tree). That writes{" "}
+              <code className="font-mono text-xs">.planning/</code> with the core XML,{" "}
+              <code className="font-mono text-xs">planning-config.toml</code>, and{" "}
+              <code className="font-mono text-xs">.planning/AGENTS.md</code>.
+            </li>
+            <li>
+              <strong className="text-[var(--foreground)]">Point your coding agent at the folder</strong> — tell it to use
+              the new <code className="font-mono text-xs">.planning/</code> tree as the source of truth for the planning
+              loop: read <code className="font-mono text-xs">STATE.xml</code> for the next action, pick one{" "}
+              <code className="font-mono text-xs">planned</code> task in{" "}
+              <code className="font-mono text-xs">TASK-REGISTRY.xml</code>, follow{" "}
+              <code className="font-mono text-xs">AGENTS.md</code>, update the XML, commit. Same artifacts the CLI and
+              cockpit summarize — nothing hidden in tool state.
+            </li>
+            <li>
+              <strong className="text-[var(--foreground)]">Steer with snapshot</strong> — run{" "}
+              <code className="font-mono text-xs">planning snapshot</code> whenever you want a terminal digest of phase,
+              workflow, state, and open tasks (plus re-injected loop rules from root{" "}
+              <code className="font-mono text-xs">AGENTS.md</code>). Below is an illustrative slice of that output.
+            </li>
+          </ol>
+          <div className="mt-8">
+            <h3 className="text-sm font-medium text-[var(--foreground)]">Example: planning snapshot (illustrative)</h3>
+            <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+              Real repos print longer AGENTS and task tables; run the CLI locally for authoritative output.
+            </p>
+            <div className="mt-3">
+              <CopyBlock label="terminal">{SNAPSHOT_SAMPLE}</CopyBlock>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Philosophy — skillless Ralph */}
       <section className="rp-section-band border-t border-[var(--border)] py-14" id="philosophy">
         <div className="mx-auto max-w-4xl px-4 sm:px-6">
           <h2 className="font-display text-2xl font-semibold text-[var(--foreground)] sm:text-3xl">
-            Skillless Ralph Wiggum loop — brownfield only
+            Skillless Ralph Wiggum loop
           </h2>
           <p className="mt-4 max-w-3xl text-[var(--muted-foreground)]">
             <strong className="text-[var(--foreground)]">“Ralph Wiggum loop”</strong> here means the same tight cycle
@@ -219,24 +256,28 @@ export default function Page() {
                 </li>
                 <li>
                   <strong className="text-[var(--foreground)]">Host-owned UI</strong> — React surfaces ship as packages
-                  you embed; this site only demonstrates primitives and a <strong>mock</strong> cockpit preview.
+                  you embed; this site demonstrates primitives, a mock cockpit preview, and a{" "}
+                  <a className="text-[var(--primary)] underline-offset-4 hover:underline" href="/cockpit">
+                    pack-driven demo
+                  </a>{" "}
+                  that matches the mock layout.
                 </li>
               </ul>
             </div>
             <div>
-              <h3 className="font-display text-lg font-medium text-[var(--foreground)]">Why brownfield only</h3>
+              <h3 className="font-display text-lg font-medium text-[var(--foreground)]">Where it fits</h3>
               <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-relaxed text-[var(--muted-foreground)]">
                 <li>
-                  RepoPlanner assumes you already have a repo: modules, tests, CI, and history. Tasks reference{" "}
-                  <strong className="text-[var(--foreground)]">real verification commands</strong> and paths.
+                  <strong className="text-[var(--foreground)]">Well suited to existing codebases</strong> — real modules,
+                  tests, and CI give tasks meaningful verification commands and paths.
                 </li>
                 <li>
-                  Greenfield product invention (what to build, user research, blank-slate architecture) is not encoded
-                  here — the loop is for <strong className="text-[var(--foreground)]">shipping and maintaining</strong>{" "}
-                  software that already exists.
+                  <strong className="text-[var(--foreground)]">Keeps planning in one place</strong> — one{" "}
+                  <code className="font-mono text-xs">.planning/</code> tree instead of scattering roadmap and task state
+                  across issues and one-off markdown.
                 </li>
                 <li>
-                  If you need measured workflows, skills, and eval harnesses across greenfield and brownfield, use{" "}
+                  For measured workflows, skills, and eval harnesses, use{" "}
                   <a
                     href={GET_ANYTHING_DONE_SITE}
                     className="text-[var(--primary)] underline-offset-4 hover:underline"
@@ -245,14 +286,14 @@ export default function Page() {
                   >
                     Get Anything Done
                   </a>{" "}
-                  as the active framework; RepoPlanner remains a <strong className="text-[var(--foreground)]">file + UI</strong>{" "}
+                  as the active framework; RepoPlanner stays a <strong className="text-[var(--foreground)]">file + UI</strong>{" "}
                   reference.
                 </li>
               </ul>
             </div>
           </div>
 
-          <div className="mt-10 rounded-xl border border-[var(--border)] bg-[#0f0d0c] p-5">
+          <div className="mt-10 rounded-xl border border-[var(--border)] bg-[var(--surface-inset)] p-5">
             <h3 className="text-sm font-medium text-[var(--foreground)]">One iteration, spelled out</h3>
             <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-[var(--muted-foreground)]">
               <li>
@@ -334,8 +375,8 @@ export default function Page() {
               <a href={REFERENCE_LINKS.ralphYoutube} className="text-[var(--primary)] underline-offset-4 hover:underline" target="_blank" rel="noopener noreferrer">
                 the creator interview on YouTube
               </a>
-              . RepoPlanner&apos;s CLI is the <strong className="text-[var(--foreground)]">brownfield</strong> variant:
-              each <code className="font-mono text-xs">snapshot</code> is a <strong className="text-[var(--foreground)]">steering digest</strong> — it
+              . RepoPlanner&apos;s CLI treats each <code className="font-mono text-xs">snapshot</code> as a{" "}
+              <strong className="text-[var(--foreground)]">steering digest</strong> — it
               narrows attention to the current sprint window, workflow signals, and the next actionable tasks instead of
               re-reading every artifact. It also <strong className="text-[var(--foreground)]">re-injects</strong> root{" "}
               <code className="font-mono text-xs">AGENTS.md</code> under <code className="font-mono text-xs">BEHAVIOR</code> so
@@ -362,18 +403,15 @@ export default function Page() {
           </div>
 
           <div className="mt-12">
-            <h3 className="font-display text-lg font-medium text-[var(--foreground)]">Example output (illustrative)</h3>
+            <h3 className="font-display text-lg font-medium text-[var(--foreground)]">More example output (illustrative)</h3>
             <p className="mt-2 text-sm text-[var(--muted-foreground)]">
-              Truncated samples — real repos include longer AGENTS sections and task tables. Run the CLI locally for
-              authoritative output.
+              A full <code className="font-mono text-xs">planning snapshot</code> trace lives in{" "}
+              <a href="#quick-start" className="text-[var(--primary)] underline-offset-4 hover:underline">
+                Quick start
+              </a>
+              . Below: checklist, init help, and report behavior.
             </p>
             <div className="mt-6 space-y-8">
-              <div>
-                <h4 className="text-sm font-medium text-[var(--foreground)]">planning snapshot</h4>
-                <div className="mt-2">
-                  <CopyBlock label="terminal">{SNAPSHOT_SAMPLE}</CopyBlock>
-                </div>
-              </div>
               <div>
                 <h4 className="text-sm font-medium text-[var(--foreground)]">planning setup checklist</h4>
                 <div className="mt-2">
@@ -390,12 +428,6 @@ export default function Page() {
                 <h4 className="text-sm font-medium text-[var(--foreground)]">planning report generate (behavior)</h4>
                 <div className="mt-2">
                   <CopyBlock label="terminal">{REPORT_GENERATE_SAMPLE}</CopyBlock>
-                </div>
-              </div>
-              <div>
-                <h4 className="text-sm font-medium text-[var(--foreground)]">planning pack embed-build --help</h4>
-                <div className="mt-2">
-                  <CopyBlock label="terminal">{PACK_EMBED_BUILD_HELP_SAMPLE}</CopyBlock>
                 </div>
               </div>
             </div>
@@ -524,12 +556,11 @@ export default function Page() {
               title="Cockpit (mock)"
               description={
                 <>
-                  Illustrative shell: roadmap column, STATE next-action, TASK-REGISTRY rows. For the full in-browser
-                  workspace (static pack, no persistence), open{" "}
+                  Static preview of the shell: roadmap column, STATE next-action, TASK-REGISTRY rows.{" "}
                   <a className="text-[var(--primary)] underline-offset-4 hover:underline" href="/cockpit">
                     /cockpit
-                  </a>
-                  .
+                  </a>{" "}
+                  uses the same layout with data from the built-in pack (read-only, no persistence).
                 </>
               }
               code={cockpitSource}
@@ -548,7 +579,7 @@ export default function Page() {
         <p className="mt-3 max-w-3xl text-[var(--muted-foreground)]">
           Download the same file layout the CLI would write for a minimal bootstrap: repo-root narrative,{" "}
           <code className="font-mono text-xs">planning-config.toml</code>, and core XML under{" "}
-          <code className="font-mono text-xs">.planning/</code>. Use it to diff against your brownfield repo or to seed a
+          <code className="font-mono text-xs">.planning/</code>. Use it to diff against an existing repo or to seed a
           review in PR form.
         </p>
         <div className="mt-8">

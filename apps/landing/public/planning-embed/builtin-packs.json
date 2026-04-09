@@ -1,6 +1,6 @@
 {
   "v": 1,
-  "generatedAt": "2026-04-09T01:09:44.896Z",
+  "generatedAt": "2026-04-09T01:51:54.805Z",
   "packs": [
     {
       "id": "rp-builtin-init",
@@ -17,7 +17,7 @@
         },
         {
           "path": ".planning/TASK-REGISTRY.xml",
-          "content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<task-registry>\n  <phase id=\"01\">\n    <task id=\"01-01\" agent-id=\"\" status=\"planned\">\n      <goal>Replace stub REQUIREMENTS.md with real scope; align ROADMAP.xml and TASK-REGISTRY.xml with open work.</goal>\n      <keywords>bootstrap,requirements,roadmap,brownfield</keywords>\n      <commands>\n        <command>pnpm run lint</command>\n      </commands>\n      <depends></depends>\n    </task>\n  </phase>\n</task-registry>\n"
+          "content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<task-registry>\n  <phase id=\"01\">\n    <task id=\"01-01\" agent-id=\"\" status=\"planned\">\n      <goal>Replace stub REQUIREMENTS.md with real scope; align ROADMAP.xml and TASK-REGISTRY.xml with open work.</goal>\n      <keywords>bootstrap,requirements,roadmap,planning-loop</keywords>\n      <commands>\n        <command>pnpm run lint</command>\n      </commands>\n      <depends></depends>\n    </task>\n  </phase>\n</task-registry>\n"
         },
         {
           "path": ".planning/ROADMAP.xml",
@@ -37,7 +37,7 @@
         },
         {
           "path": ".planning/AGENTS.md",
-          "content": "# Agent loop — skillless Ralph (brownfield only)\n\nThis is a **skillless** take on the **Ralph Wiggum loop**: the agent reads durable state from disk, does **one** concrete task, updates the XML/Markdown record, and commits. There is **no** skills framework here — no trigger files, no skill packs — only **files + optional CLI + optional cockpit** in a host app.\n\n## Scope\n\n**Brownfield only.** RepoPlanner assumes an existing codebase: real directories, tests, CI, and git history. It does **not** replace product discovery or greenfield scaffolding; it gives you a **thin, inspectable** planning layer on top of code that already exists.\n\n## Loop (every iteration)\n\n1. **Snapshot** — run your host’s planning CLI (`snapshot` / `checklist`) or open the cockpit so the current phase and next action are obvious.\n2. **Pick** — choose exactly one `planned` task in `TASK-REGISTRY.xml` (or split work until you can).\n3. **Implement** — touch the smallest surface that completes the task; run the listed verification commands.\n4. **Record** — update `STATE.xml`, task status, `DECISIONS.xml` if you changed approach, `ERRORS-AND-ATTEMPTS.xml` if something failed.\n5. **Commit** — one commit per task when possible (discipline for per-task traceability).\n\n## Where narrative lives\n\n- **REQUIREMENTS.md** (repo root) — long-form scope, roadmap tables, cross-cutting queue.\n- **.planning/*.xml** — machine-friendly timeline, tasks, state — the cockpit and CLI summarize these.\n\n## Optional CLI\n\nAdd a `package.json` script pointing at `repo-planner` / `loop-cli.mjs` if you want agents to run `snapshot` without opening the UI.\n"
+          "content": "# Agent loop — skillless Ralph\n\nThis is a **skillless** take on the **Ralph Wiggum loop**: the agent reads durable state from disk, does **one** concrete task, updates the XML/Markdown record, and commits. There is **no** skills framework here — no trigger files, no skill packs — only **files + optional CLI + optional cockpit** in a host app.\n\n## Where it fits\n\nRepoPlanner is **especially comfortable on existing repos**: real directories, tests, CI, and git history give tasks meaningful verification commands. You can use the same loop on a young repo too — the point is to keep **one** `.planning/` home for roadmap, state, and tasks instead of scattering notes across issues and ad hoc markdown.\n\n## Loop (every iteration)\n\n1. **Snapshot** — run your host’s planning CLI (`snapshot` / `checklist`) or open the cockpit so the current phase and next action are obvious.\n2. **Pick** — choose exactly one `planned` task in `TASK-REGISTRY.xml` (or split work until you can).\n3. **Implement** — touch the smallest surface that completes the task; run the listed verification commands.\n4. **Record** — update `STATE.xml`, task status, `DECISIONS.xml` if you changed approach, `ERRORS-AND-ATTEMPTS.xml` if something failed.\n5. **Commit** — one commit per task when possible (discipline for per-task traceability).\n\n## Where narrative lives\n\n- **REQUIREMENTS.md** (repo root) — long-form scope, roadmap tables, cross-cutting queue.\n- **.planning/*.xml** — machine-friendly timeline, tasks, state — the cockpit and CLI summarize these.\n\n## Optional CLI\n\nAdd a `package.json` script pointing at `repo-planner` / `loop-cli.mjs` if you want agents to run `snapshot` without opening the UI.\n"
         }
       ]
     }

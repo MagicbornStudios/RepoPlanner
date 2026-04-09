@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
  */
 export function CockpitPreview() {
   return (
-    <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--background)] text-left shadow-lg">
+    <div className="overflow-hidden rounded-xl border-2 border-[var(--primary)]/35 bg-[var(--background)] text-left shadow-lg">
       <div className="flex items-center justify-between border-b border-[var(--border)] px-3 py-2">
         <div className="flex items-center gap-2 text-xs font-medium text-[var(--foreground)]">
           <LayoutDashboard className="size-4 text-[var(--primary)]" aria-hidden />
@@ -54,14 +54,14 @@ export function CockpitPreview() {
               Tasks <span className="font-normal normal-case">(TASK-REGISTRY.xml)</span>
             </p>
             <ul className="space-y-2 text-xs">
-              <li className="flex items-start gap-2 rounded-lg border border-[var(--border)] bg-[#141110] px-2 py-2">
+              <li className="flex items-start gap-2 rounded-lg border border-[var(--border)] bg-[var(--card)] px-2 py-2">
                 <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-500/90" aria-hidden />
                 <div>
                   <span className="font-mono text-[var(--primary)]">01-00</span> · Bootstrap{" "}
                   <span className="text-[var(--muted-foreground)]">done</span>
                 </div>
               </li>
-              <li className="flex items-start gap-2 rounded-lg border border-[var(--border)] bg-[var(--card)] px-2 py-2">
+              <li className="flex items-start gap-2 rounded-lg border border-[var(--primary)]/45 bg-[var(--card)] px-2 py-2">
                 <Circle className="mt-0.5 size-4 shrink-0 text-amber-500/90" aria-hidden />
                 <div>
                   <span className="font-mono text-[var(--primary)]">01-01</span> · Align roadmap with brownfield backlog{" "}
