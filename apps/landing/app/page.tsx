@@ -1,4 +1,4 @@
-import { ArrowUpRight, BookOpen, ExternalLink, Github, LineChart, Terminal } from "lucide-react";
+import { ArrowUpRight, BookOpen, Boxes, ExternalLink, Github, LineChart, Terminal } from "lucide-react";
 import Link from "next/link";
 
 import { CockpitPreview } from "@/components/cockpit-preview";
@@ -20,6 +20,7 @@ import {
   TASK_REGISTRY_STUB,
 } from "@/lib/planning-content";
 import {
+  BUILTIN_PACK_JSON_SAMPLE,
   INIT_HELP_SAMPLE,
   REFERENCE_LINKS,
   REPORT_GENERATE_SAMPLE,
@@ -42,6 +43,7 @@ const navLinks = [
   { href: "#philosophy", label: "Philosophy" },
   { href: "#cli", label: "CLI" },
   { href: "/cockpit", label: "Cockpit demo" },
+  { href: "#packs-parsing", label: "Packs & parsing" },
   { href: "#artifacts", label: "Artifacts" },
   { href: "#components", label: "Components" },
   { href: "#init", label: "Init bundle" },
@@ -451,6 +453,77 @@ export default function Page() {
         </div>
       </section>
 
+      {/* Planning packs + client parsing */}
+      <section className="rp-section-mid border-t border-[var(--border)] py-14" id="packs-parsing">
+        <div className="mx-auto max-w-4xl px-4 sm:px-6">
+          <div className="flex items-start gap-3">
+            <Boxes className="mt-1 size-8 shrink-0 text-[var(--primary)]" aria-hidden />
+            <div>
+              <h2 className="font-display text-2xl font-semibold text-[var(--foreground)] sm:text-3xl">
+                Planning packs and parsing
+              </h2>
+              <p className="mt-2 max-w-3xl text-[var(--muted-foreground)]">
+                This site documents RepoPlanner at a fine grain: what gets committed, how a static host can ship a cockpit
+                without a database, and how that differs from vector search or &quot;embedding&quot; pipelines.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-8 space-y-6 text-sm leading-relaxed text-[var(--muted-foreground)]">
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-inset)] p-5">
+              <h3 className="font-display text-lg font-medium text-[var(--foreground)]">Checked-in tree → JSON pack</h3>
+              <p className="mt-2">
+                The <strong className="text-[var(--foreground)]">RepoPlanner repository</strong> keeps a real{" "}
+                <code className="font-mono text-xs">.planning/</code> folder (<code className="font-mono text-xs">ROADMAP.xml</code>,{" "}
+                <code className="font-mono text-xs">STATE.xml</code>, <code className="font-mono text-xs">TASK-REGISTRY.xml</code>,{" "}
+                <code className="font-mono text-xs">REQUIREMENTS.xml</code>, <code className="font-mono text-xs">DECISIONS.xml</code>,{" "}
+                etc.). On build, <code className="font-mono text-xs">apps/landing/scripts/build-builtin-packs.cjs</code> copies that
+                tree into <code className="font-mono text-xs">public/planning-embed/builtin-packs.json</code> as virtual paths plus raw
+                file bodies. The downloadable init bundle under <code className="font-mono text-xs">public/init/planning/</code> stays in
+                sync so <code className="font-mono text-xs">planning init</code> matches what the demo shows.
+              </p>
+            </div>
+
+            <div>
+              <h3 className="font-display text-lg font-medium text-[var(--foreground)]">
+                <Link className="text-[var(--foreground)] hover:underline" href="/cockpit">
+                  /cockpit
+                </Link>{" "}
+                — read-only app on top of XML
+              </h3>
+              <p className="mt-2 max-w-3xl">
+                The route is a <strong className="text-[var(--foreground)]">small read-only client app</strong>: fetch the JSON pack,
+                locate the three core XML files, run them through{" "}
+                <strong className="text-[var(--foreground)]">fast-xml-parser</strong> (attribute-aware parse to plain objects), then render
+                roadmap rows, the <code className="font-mono text-xs">next-action</code> string from <code className="font-mono text-xs">STATE.xml</code>, and task
+                list items with status from <code className="font-mono text-xs">TASK-REGISTRY.xml</code>. No writes, no fake task rows — if you
+                change XML on a branch and rebuild, the lists change. That is intentionally different from the home-page{" "}
+                <strong className="text-[var(--foreground)]">Cockpit (mock)</strong>, which uses fixed placeholder copy to show layout only.
+              </p>
+              <p className="mt-3 max-w-3xl">
+                If you hear <strong className="text-[var(--foreground)]">fastembed</strong> or &quot;embeddings&quot; in another tool, that usually means{" "}
+                <strong className="text-[var(--foreground)]">semantic search</strong> over vectors. RepoPlanner&apos;s landing demo does{" "}
+                <strong className="text-[var(--foreground)]">not</strong> use that path for the cockpit lists — it uses{" "}
+                <strong className="text-[var(--foreground)]">structured XML parsing</strong> so what you see matches git.
+              </p>
+            </div>
+
+            <div>
+              <h3 className="font-display text-lg font-medium text-[var(--foreground)]">What a planning-pack JSON looks like</h3>
+              <p className="mt-2 max-w-3xl">
+                Hosts that run <code className="font-mono text-xs">planning pack</code> tooling (or an embed-build step) produce a similar
+                payload: one or more packs, each with an array of objects carrying <code className="font-mono text-xs">path</code> and{" "}
+                <code className="font-mono text-xs">content</code> strings. Static sites can
+                ship that file next to <code className="font-mono text-xs">index.html</code> and hydrate a read-only cockpit the same way.
+              </p>
+              <div className="mt-4">
+                <CopyBlock label="builtin-packs.json (trimmed)">{BUILTIN_PACK_JSON_SAMPLE}</CopyBlock>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Artifacts */}
       <section className="rp-section-mid border-t border-[var(--border)] py-14" id="artifacts">
         <div className="mx-auto max-w-4xl px-4 sm:px-6">
@@ -561,11 +634,13 @@ export default function Page() {
               title="Cockpit (mock)"
               description={
                 <>
-                  Static preview of the shell: roadmap column, STATE next-action, TASK-REGISTRY rows.{" "}
+                  Static preview of the shell (placeholder rows).{" "}
                   <Link className="text-[var(--primary)] underline-offset-4 hover:underline" href="/cockpit">
                     /cockpit
                   </Link>{" "}
-                  uses the same layout with data from the built-in pack (read-only, no persistence).
+                  uses the same chrome but parses real <code className="font-mono text-xs">ROADMAP.xml</code>,{" "}
+                  <code className="font-mono text-xs">STATE.xml</code>, and <code className="font-mono text-xs">TASK-REGISTRY.xml</code> from
+                  the bundled pack via <strong className="text-[var(--foreground)]">fast-xml-parser</strong>.
                 </>
               }
               code={cockpitSource}

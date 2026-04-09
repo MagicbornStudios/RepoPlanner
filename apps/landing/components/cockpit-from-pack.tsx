@@ -48,9 +48,11 @@ function parsePackFiles(files: { path: string; content: string }[]) {
       const raw = asArray(doc.roadmap?.phase);
       phases = raw.map((ph) => {
         const o = ph as Record<string, unknown>;
+        const shortTitle = textContent(o.title);
+        const goal = textContent(o.goal);
         return {
           id: attr(o, "id") || "?",
-          title: textContent(o.goal) || "Phase",
+          title: shortTitle || goal || "Phase",
           status: textContent(o.status) || "planned",
         };
       });
@@ -136,8 +138,8 @@ export function CockpitFromPack({ preferPackId }: { preferPackId: string }) {
     };
   }, [preferPackId]);
 
-  const displayPhases = useMemo(() => phases.slice(0, 4), [phases]);
-  const displayTasks = useMemo(() => tasks.slice(0, 6), [tasks]);
+  const displayPhases = useMemo(() => phases, [phases]);
+  const displayTasks = useMemo(() => tasks, [tasks]);
 
   if (loading) {
     return (
@@ -164,7 +166,7 @@ export function CockpitFromPack({ preferPackId }: { preferPackId: string }) {
           <LayoutDashboard className="size-4 text-[var(--primary)]" aria-hidden />
           Planning cockpit
           <span className="rounded bg-[var(--muted)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--muted-foreground)]">
-            built-in pack
+            read-only · parsed XML
           </span>
         </div>
         <Button type="button" size="sm" variant="outline" className="h-7 text-xs" disabled>
@@ -174,7 +176,7 @@ export function CockpitFromPack({ preferPackId }: { preferPackId: string }) {
       <div className="grid min-h-[220px] gap-0 md:grid-cols-[minmax(0,11rem)_1fr]">
         <aside className="border-b border-[var(--border)] bg-[var(--card)] p-3 md:border-b-0 md:border-r">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Roadmap</p>
-          <ul className="mt-2 space-y-1.5 text-xs">
+          <ul className="mt-2 max-h-[min(22rem,50vh)] space-y-1.5 overflow-y-auto pr-1 text-xs">
             {displayPhases.map((ph, i) => {
               const isActive = i === (activeIdx >= 0 ? activeIdx : 0);
               return (
@@ -187,7 +189,7 @@ export function CockpitFromPack({ preferPackId }: { preferPackId: string }) {
                   }
                 >
                   <span className="font-mono text-[var(--primary)]">{ph.id}</span> ·{" "}
-                  {ph.title.length > 48 ? `${ph.title.slice(0, 46)}…` : ph.title}
+                  {ph.title.length > 56 ? `${ph.title.slice(0, 54)}…` : ph.title}
                 </li>
               );
             })}
@@ -210,7 +212,7 @@ export function CockpitFromPack({ preferPackId }: { preferPackId: string }) {
             {displayTasks.length === 0 ? (
               <p className="text-xs text-[var(--muted-foreground)]">No tasks in this pack.</p>
             ) : (
-              <ul className="space-y-2 text-xs">
+              <ul className="max-h-[min(22rem,50vh)] space-y-2 overflow-y-auto pr-1 text-xs">
                 {displayTasks.map((t) => {
                   const st = t.status;
                   const done = st === "done";
@@ -248,9 +250,14 @@ export function CockpitFromPack({ preferPackId }: { preferPackId: string }) {
           </div>
         </div>
       </div>
-      <p className="border-t border-[var(--border)] px-3 py-2 text-[10px] text-[var(--muted-foreground)]">
-        Same layout as the landing <strong className="text-[var(--foreground)]">Cockpit (mock)</strong> — data comes from
-        the built-in pack. Embed <code className="font-mono">repo-planner/host</code> in your app for the full workspace.
+      <p className="border-t border-[var(--border)] px-3 py-2 text-[10px] leading-relaxed text-[var(--muted-foreground)]">
+        <strong className="text-[var(--foreground)]">Read-only app:</strong> rows above are parsed from committed{" "}
+        <code className="font-mono">ROADMAP.xml</code>, <code className="font-mono">STATE.xml</code>, and{" "}
+        <code className="font-mono">TASK-REGISTRY.xml</code> in this repo&apos;s{" "}
+        <code className="font-mono">.planning/</code>, bundled as JSON and parsed in the browser with{" "}
+        <strong className="text-[var(--foreground)]">fast-xml-parser</strong> (not embeddings). Same chrome as the home page{" "}
+        <strong className="text-[var(--foreground)]">Cockpit (mock)</strong>, which uses static placeholder copy. For the full
+        workspace, embed <code className="font-mono">repo-planner/host</code>.
       </p>
     </div>
   );

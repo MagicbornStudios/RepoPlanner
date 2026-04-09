@@ -1,6 +1,7 @@
 "use client";
 
 import { CheckCircle2, Circle, LayoutDashboard, ListTodo } from "lucide-react";
+import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 
@@ -72,9 +73,13 @@ export function CockpitPreview() {
           </div>
         </div>
       </div>
-      <p className="border-t border-[var(--border)] px-3 py-2 text-[10px] text-[var(--muted-foreground)]">
-        Host apps embed <code className="font-mono">repo-planner/host</code> to wire real XML + packs. This page ships a
-        static preview only.
+      <p className="border-t border-[var(--border)] px-3 py-2 text-[10px] leading-relaxed text-[var(--muted-foreground)]">
+        <strong className="text-[var(--foreground)]">Layout-only mock</strong> — rows are hard-coded. For the same chrome with
+        real tasks parsed from this repo&apos;s <code className="font-mono">.planning/*.xml</code>, open{" "}
+        <Link href="/cockpit" className="text-[var(--primary)] underline-offset-4 hover:underline">
+          /cockpit
+        </Link>
+        . Host apps embed <code className="font-mono">repo-planner/host</code> for the full workspace.
       </p>
     </div>
   );

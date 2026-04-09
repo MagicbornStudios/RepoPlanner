@@ -2,3 +2,4 @@ node_modules/
 .next/
 apps/landing/.next/
 apps/landing/node_modules/
+.planning/reports/

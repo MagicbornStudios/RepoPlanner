@@ -30,7 +30,7 @@ PHASE
     01  [active]
     02  [planned]
 
-  Similar phases: install optional dep fastembed to enable.`;
+  (Optional) Use profile defaults or JSON output where your CLI exposes them for tooling.`;
 
 export const SETUP_CHECKLIST_SAMPLE = `ok  Git installed and on PATH
 ok  .planning directory exists
@@ -57,6 +57,24 @@ when present. If the template is missing, the CLI prints a clear error with the
 expected path (e.g. .planning/templates/agent-loop-report.md.ejs).
 
 Typical follow-up: planning report view — opens a minimal local viewer.`;
+
+/** Trimmed shape of `builtin-packs.json` — same idea as `planning pack embed-build` output for static hosts. */
+export const BUILTIN_PACK_JSON_SAMPLE = `{
+  "v": 1,
+  "generatedAt": "2026-04-10T12:00:00.000Z",
+  "packs": [
+    {
+      "id": "rp-builtin-init",
+      "label": "RepoPlanner .planning (reference tree)",
+      "description": "Virtual paths + raw file bodies for the browser or a static CDN.",
+      "files": [
+        { "path": ".planning/ROADMAP.xml", "content": "<!-- full ROADMAP.xml text -->" },
+        { "path": ".planning/STATE.xml", "content": "<!-- full STATE.xml text -->" },
+        { "path": ".planning/TASK-REGISTRY.xml", "content": "<!-- full TASK-REGISTRY.xml text -->" }
+      ]
+    }
+  ]
+}`;
 
 export const REFERENCE_LINKS = {
   ralphAwesome: "https://awesomeclaude.ai/ralph-wiggum",
