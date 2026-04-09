@@ -6,8 +6,9 @@
     "node": ">=22.0.0"
   },
   "scripts": {
-    "prebuild": "node scripts/build-builtin-packs.cjs",
-    "dev": "node scripts/build-builtin-packs.cjs && next dev --port 3040",
+    "postinstall": "node scripts/link-landing-deps-to-repo-root.mjs",
+    "prebuild": "node scripts/link-landing-deps-to-repo-root.mjs && node scripts/build-builtin-packs.cjs",
+    "dev": "node scripts/link-landing-deps-to-repo-root.mjs && node scripts/build-builtin-packs.cjs && next dev --port 3040",
     "build": "next build",
     "start": "next start --port 3040",
     "lint": "next lint"
