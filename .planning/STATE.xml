@@ -17,4 +17,5 @@
     <format>agent-YYYYMMDD-xxxx</format>
     <rule>Optional: register a unique id in STATE.xml before claiming tasks if you use CLI task-update.</rule>
   </agent-id-policy>
+  <sink-compiled sink="apps/portfolio/content/docs/repo-planner/planning/" at="2026-04-10T18:21:34.434Z" />
 </state>
